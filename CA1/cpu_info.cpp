@@ -27,8 +27,31 @@ void get_core_info() {
     int logical = (b >> 16) & 0xFF;
     bool ht_supported = d & (1 << 28);
 
-    __cpuid_count(4, 0, a, b, c, d);
-    int physical = ((a >> 26) & 0x3F) + 1;
+    int physical = 0;
+    
+    // Try AMD-specific method first (Leaf 0x80000008)
+    unsigned int max_ext_leaf;
+    __cpuid(0x80000000, max_ext_leaf, b, c, d);
+    if (max_ext_leaf >= 0x80000008) {
+        __cpuid(0x80000008, a, b, c, d);
+        // For AMD, ECX bits 0-7 contain (number of physical cores - 1)
+        int amd_physical = (c & 0xFF) + 1;
+        if (amd_physical > 0 && amd_physical <= logical) {
+            physical = amd_physical;
+        }
+    }
+    
+    // Try Intel method (Leaf 0x4) if AMD method didn't work
+    if (physical == 0) {
+        __cpuid_count(4, 0, a, b, c, d);
+        int intel_physical = ((a >> 26) & 0x3F) + 1;
+        if (intel_physical > 0 && intel_physical <= logical) {
+            physical = intel_physical;
+        }
+    }
+    
+    // Fallback: assume physical equals logical
+    if (physical == 0) physical = logical;
 
     cout << "Physical cores: " << physical << endl;
     cout << "Logical processors: " << logical << endl;

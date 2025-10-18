@@ -94,29 +94,47 @@ int main() {
         htt_supported = (edx >> 28) & 1;
     }
 
-    // Modern method (Leaf 0xB) for core count
-    if (max_leaf >= 0xB) {
-        int level_type, num_logical_at_level;
-        cpuid(0xB, 1, &eax, &ebx, &ecx, &edx); // Core level
-        level_type = (ecx >> 8) & 0xFF;
-        if (level_type == 2) { // 2 = Core level
-            logical_cores = ebx & 0xFFFF;
+    // AMD-specific method (Leaf 0x80000008) for core count
+    if (max_ext_leaf >= 0x80000008) {
+        cpuid(0x80000008, 0, &eax, &ebx, &ecx, &edx);
+        // For AMD, ECX bits 0-7 contain (number of physical cores - 1)
+        int amd_physical = (ecx & 0xFF) + 1;
+        if (amd_physical > 0 && amd_physical <= logical_cores) {
+            physical_cores = amd_physical;
         }
+    }
 
-        cpuid(0xB, 0, &eax, &ebx, &ecx, &edx); // Thread level
-        level_type = (ecx >> 8) & 0xFF;
-        if (level_type == 1) { // 1 = SMT (Thread) level
-            int threads_per_core = ebx & 0xFFFF;
-            if (threads_per_core > 0) {
-                physical_cores = logical_cores / threads_per_core;
+    // Intel modern method (Leaf 0xB) for core count - only if AMD method didn't work
+    if (physical_cores == 0 && max_leaf >= 0xB) {
+        int level_type, num_logical_at_level;
+        int threads_per_core = 0;
+        
+        // Iterate through subleaves to find SMT and Core levels
+        for (int subleaf = 0; subleaf < 5; subleaf++) {
+            cpuid(0xB, subleaf, &eax, &ebx, &ecx, &edx);
+            level_type = (ecx >> 8) & 0xFF;
+            
+            if (level_type == 0) break; // Invalid level, end of enumeration
+            
+            if (level_type == 1) { // SMT (Thread) level
+                threads_per_core = ebx & 0xFFFF;
+            } else if (level_type == 2) { // Core level
+                num_logical_at_level = ebx & 0xFFFF;
+                if (threads_per_core > 0 && num_logical_at_level > 0) {
+                    physical_cores = num_logical_at_level / threads_per_core;
+                }
             }
         }
     } 
     
-    // Fallback (legacy) method if modern one failed
+    // Fallback (legacy) method for older Intel CPUs
     if (physical_cores == 0 && max_leaf >= 4) {
          cpuid(0x4, 0, &eax, &ebx, &ecx, &edx);
-         physical_cores = ((eax >> 26) & 0x3F) + 1;
+         int cores_from_cache = ((eax >> 26) & 0x3F) + 1;
+         // Only use this if it gives a reasonable result
+         if (cores_from_cache > 0 && cores_from_cache <= logical_cores) {
+             physical_cores = cores_from_cache;
+         }
     }
 
     // Final fallback for very old CPUs

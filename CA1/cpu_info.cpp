@@ -3,8 +3,14 @@
 #include <cstring>
 #include <string>
 #include <cpuid.h>
+#include <iomanip>
+#include <cstdint>
 
 using namespace std;
+
+inline void cpuid(int leaf, int subleaf, int* eax, int* ebx, int* ecx, int* edx) {
+    __cpuid_count(leaf, subleaf, *eax, *ebx, *ecx, *edx);
+}
 
 void get_cpuid(unsigned int leaf, unsigned int subleaf, unsigned int &a, unsigned int &b, unsigned int &c, unsigned int &d) {
     __cpuid_count(leaf, subleaf, a, b, c, d);
@@ -21,18 +27,50 @@ string get_cpu_name() {
 }
 
 void get_core_info() {
-    unsigned int a, b, c, d;
+    int eax, ebx, ecx, edx;
+    int max_leaf, max_ext_leaf;
 
-    __cpuid(1, a, b, c, d);
-    int logical = (b >> 16) & 0xFF;
-    bool ht_supported = d & (1 << 28);
+    cpuid(0x0, 0, &max_leaf, &ebx, &ecx, &edx);
+    cpuid(0x80000000, 0, &max_ext_leaf, &ebx, &ecx, &edx);
 
-    __cpuid_count(4, 0, a, b, c, d);
-    int physical = ((a >> 26) & 0x3F) + 1;
+    int logical_cores = 0;
+    int physical_cores = 0;
+    int htt_supported = 0;
 
-    cout << "Physical cores: " << physical << endl;
-    cout << "Logical processors: " << logical << endl;
-    cout << "Hyperthreading supported: " << (ht_supported ? "Yes" : "No") << endl;
+    if (max_leaf >= 1) {
+        cpuid(0x1, 0, &eax, &ebx, &ecx, &edx);
+        logical_cores = (ebx >> 16) & 0xFF;
+        htt_supported = (edx >> 28) & 1;
+    }
+
+    if (max_leaf >= 0xB) {
+        int level_type;
+        cpuid(0xB, 1, &eax, &ebx, &ecx, &edx);
+        level_type = (ecx >> 8) & 0xFF;
+        if (level_type == 2) { 
+            logical_cores = ebx & 0xFFFF;
+        }
+
+        cpuid(0xB, 0, &eax, &ebx, &ecx, &edx); 
+        level_type = (ecx >> 8) & 0xFF;
+        if (level_type == 1) { 
+            int threads_per_core = ebx & 0xFFFF;
+            if (threads_per_core > 0) {
+                physical_cores = logical_cores / threads_per_core;
+            }
+        }
+    } 
+    
+    if (physical_cores == 0 && max_leaf >= 4) {
+         cpuid(0x4, 0, &eax, &ebx, &ecx, &edx);
+         physical_cores = ((eax >> 26) & 0x3F) + 1;
+    }
+
+    if (physical_cores == 0) physical_cores = logical_cores;
+
+    cout << "Physical cores: " << physical_cores << endl;
+    cout << "Logical processors: " << logical_cores << endl;
+    cout << "Hyperthreading supported: " << (htt_supported ? "Yes" : "No") << endl;    
 }
 
 void get_clock_info() {

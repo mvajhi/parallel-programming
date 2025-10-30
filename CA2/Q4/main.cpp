@@ -34,11 +34,11 @@ void free_mat(float **matrix, int row)
 		free(matrix[i]);
 }
 
-float *create_list(int size, float base = 0, float coef = 0)
+float *create_list(int size)
 {
 	float *list = (float *)_mm_malloc(sizeof(float) * size, sizeof(float) * 8);
 	for (int i = 0; i < size; i++)
-		list[i] = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/100.0));
+		list[i] = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * 200.0f - 100.0f;
 	return list;
 }
 
@@ -46,7 +46,7 @@ float **create_matrix(int row, int col)
 {
 	float **mat = (float **)_mm_malloc(sizeof(float *) * row, sizeof(float *) * 8);
 	for (int i = 0; i < row; i++)
-		mat[i] = create_list(col, 0, 0.1);
+		mat[i] = create_list(col);
 	return mat;
 }
 
@@ -173,30 +173,33 @@ Ipp64u execute_and_print(float* input, Layer& l1, Layer& l2, Layer& l3)
 int main(void)
 {
 	Ipp64u time1, time2;
+	auto seed = static_cast<unsigned int>(std::time(nullptr));
+	srand(seed);
 
+	cout << seed << " ,";
 	cout << INPUT_SIZE << " ,";
 	cout << HIDDEN_SIZE << " ,";
 	cout << OUTPUT_SIZE << "\n";
 
-	float *input = create_list(INPUT_SIZE, 0, 0.1);
-	cout << "input: ";
+	float *input = create_list(INPUT_SIZE);
+	// cout << "input: ";
 	// print_list(input, INPUT_SIZE);
 
 	float **weights_l1 = create_matrix(HIDDEN_SIZE, INPUT_SIZE);
-	cout << "weight layer 1: \n";
+	// cout << "weight layer 1: \n";
 	// print_matrix(weights_l1, HIDDEN_SIZE, INPUT_SIZE);
 
 	float **weights_l2 = create_matrix(HIDDEN_SIZE, HIDDEN_SIZE);
-	cout << "weight layer 2: \n";
+	// cout << "weight layer 2: \n";
 	// print_matrix(weights_l2, HIDDEN_SIZE, HIDDEN_SIZE);
 
 	float **weights_l3 = create_matrix(OUTPUT_SIZE, HIDDEN_SIZE);
-	cout << "weight layer 3: \n";
+	// cout << "weight layer 3: \n";
 	// print_matrix(weights_l3, OUTPUT_SIZE, HIDDEN_SIZE);
 
-	float bais_l1 = 1;
-	float bais_l2 = 2;
-	float bais_l3 = 3;
+	float bais_l1 = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * 200.0f - 100.0f;
+	float bais_l2 = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * 200.0f - 100.0f;
+	float bais_l3 = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * 200.0f - 100.0f;
 
 	cout << "\n--- Serial Execution ---" << endl;
 	{

@@ -1,6 +1,6 @@
 CC=g++
 
-CFLAGS=-c -mavx2
+CFLAGS=-c -mavx2 -mfma
 
 P=/home/mvajhi/intel/oneapi/ipp/latest
 

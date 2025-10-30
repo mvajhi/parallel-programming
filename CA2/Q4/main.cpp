@@ -124,8 +124,8 @@ public:
 			mac = _mm256_set1_ps(0.0);
 			for (int j = 0; j < input_size; j += 8)
 			{
-				x_tmp = _mm256_loadu_ps(&x[j]);
-				w_tmp = _mm256_loadu_ps(&weights[i][j]);
+				x_tmp = _mm256_load_ps(&x[j]);
+				w_tmp = _mm256_load_ps(&weights[i][j]);
 				mac = _mm256_fmadd_ps(x_tmp, w_tmp, mac);
 			}
 

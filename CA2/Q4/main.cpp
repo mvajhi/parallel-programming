@@ -6,8 +6,8 @@
 
 using namespace std;
 
-const int INPUT_SIZE = 8;
-const int HIDDEN_SIZE = 16;
+const int INPUT_SIZE = 800;
+const int HIDDEN_SIZE = 16000;
 const int OUTPUT_SIZE = 8;
 
 void print_list(float *list, int size)
@@ -38,7 +38,7 @@ float *create_list(int size, float base = 0, float coef = 0)
 {
 	float *list = (float *)_mm_malloc(sizeof(float) * size, sizeof(float) * 8);
 	for (int i = 0; i < size; i++)
-		list[i] = base + (i + 1) * coef;
+		list[i] = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/100.0));
 	return list;
 }
 
@@ -56,13 +56,19 @@ protected:
 	float **weights;
 	float bias;
 	int input_size;
-	int output_size;
 	float *out;
-
+	
 public:
+	int output_size;
+
 	Layer(int input_size, int output_size) : input_size(input_size), output_size(output_size), weights(nullptr), out(nullptr)
 	{
 		this->out = (float *)_mm_malloc(sizeof(float) * output_size, sizeof(float) * 8);
+	}
+
+	~Layer()
+	{
+		_mm_free(out);
 	}
 
 	void set_weights(float **weights, float bias)
@@ -145,70 +151,84 @@ public:
 	}
 };
 
+Ipp64u execute_and_print(float* input, Layer& l1, Layer& l2, Layer& l3)
+{
+	Ipp64u start, end;
+	float* x = input;
+
+	start = ippGetCpuClocks();
+	
+	x = l1.forward(x);
+	x = l2.forward(x);
+	x = l3.forward(x);
+	
+	end   = ippGetCpuClocks();
+	
+	Ipp64u time = end - start;
+	print_list(x, l3.output_size);
+
+	return time;
+}
+
 int main(void)
 {
+	Ipp64u time1, time2;
+
+	cout << INPUT_SIZE << " ,";
+	cout << HIDDEN_SIZE << " ,";
+	cout << OUTPUT_SIZE << "\n";
+
 	float *input = create_list(INPUT_SIZE, 0, 0.1);
 	cout << "input: ";
-	print_list(input, INPUT_SIZE);
+	// print_list(input, INPUT_SIZE);
 
 	float **weights_l1 = create_matrix(HIDDEN_SIZE, INPUT_SIZE);
 	cout << "weight layer 1: \n";
-	print_matrix(weights_l1, HIDDEN_SIZE, INPUT_SIZE);
+	// print_matrix(weights_l1, HIDDEN_SIZE, INPUT_SIZE);
 
 	float **weights_l2 = create_matrix(HIDDEN_SIZE, HIDDEN_SIZE);
 	cout << "weight layer 2: \n";
-	print_matrix(weights_l2, HIDDEN_SIZE, HIDDEN_SIZE);
+	// print_matrix(weights_l2, HIDDEN_SIZE, HIDDEN_SIZE);
 
 	float **weights_l3 = create_matrix(OUTPUT_SIZE, HIDDEN_SIZE);
 	cout << "weight layer 3: \n";
-	print_matrix(weights_l3, OUTPUT_SIZE, HIDDEN_SIZE);
+	// print_matrix(weights_l3, OUTPUT_SIZE, HIDDEN_SIZE);
 
 	float bais_l1 = 1;
 	float bais_l2 = 2;
 	float bais_l3 = 3;
-	{
-		float *x = input;
 
+	cout << "\n--- Serial Execution ---" << endl;
+	{
 		SerialLayer l1(INPUT_SIZE, HIDDEN_SIZE);
 		l1.set_weights(weights_l1, bais_l1);
-		x = l1.forward(x);
-		cout << "out_l1: ";
-		print_list(x, HIDDEN_SIZE);
 
 		SerialLayer l2(HIDDEN_SIZE, HIDDEN_SIZE);
 		l2.set_weights(weights_l2, bais_l2);
-		x = l2.forward(x);
-		cout << "out_l2: ";
-		print_list(x, HIDDEN_SIZE);
 
 		SerialLayer l3(HIDDEN_SIZE, OUTPUT_SIZE);
 		l3.set_weights(weights_l3, bais_l3);
-		x = l3.forward(x);
-		cout << "out_l3: ";
-		print_list(x, OUTPUT_SIZE);
-	}
+        
+        time1 = execute_and_print(input, l1, l2, l3);
+	} 
 
+	cout << "\n--- Parallel Execution ---" << endl;
 	{
-		float *x = input;
-
 		ParallelLayer l1(INPUT_SIZE, HIDDEN_SIZE);
 		l1.set_weights(weights_l1, bais_l1);
-		x = l1.forward(x);
-		cout << "out_l1: ";
-		print_list(x, HIDDEN_SIZE);
 
 		ParallelLayer l2(HIDDEN_SIZE, HIDDEN_SIZE);
 		l2.set_weights(weights_l2, bais_l2);
-		x = l2.forward(x);
-		cout << "out_l2: ";
-		print_list(x, HIDDEN_SIZE);
 
 		ParallelLayer l3(HIDDEN_SIZE, OUTPUT_SIZE);
 		l3.set_weights(weights_l3, bais_l3);
-		x = l3.forward(x);
-		cout << "out_l3: ";
-		print_list(x, OUTPUT_SIZE);
+
+        time2 = execute_and_print(input, l1, l2, l3);
 	}
+
+	printf ("Serial Run time = %u \n", (Ipp32s) time1);
+	printf ("Parallel Run time = %u \n", (Ipp32s) time2);
+	printf ("Speedup = %f\n\n", (float) (time1)/(float) time2);
 
 	return 0;
 }

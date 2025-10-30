@@ -1,8 +1,8 @@
-#include 	"stdio.h"
-#include 	"ipp.h"
-#include 	"x86intrin.h"
-#include	<iostream>
-#include	<iomanip>
+#include "stdio.h"
+#include "ipp.h"
+#include "x86intrin.h"
+#include <iostream>
+#include <iomanip>
 
 using namespace std;
 
@@ -10,17 +10,17 @@ const int INPUT_SIZE = 8;
 const int HIDDEN_SIZE = 16;
 const int OUTPUT_SIZE = 8;
 
-void print_list(float* list, int size)
+void print_list(float *list, int size)
 {
-	std::cout << std::fixed;      
-    std::cout << std::setprecision(3);
+	std::cout << std::fixed;
+	std::cout << std::setprecision(3);
 	cout << "[";
 	for (int i = 0; i < size; i++)
 		cout << list[i] << " ,";
 	cout << "]\n";
 }
 
-void print_matrix(float** matrix, int row, int col)
+void print_matrix(float **matrix, int row, int col)
 {
 	cout << "{\n";
 	for (int i = 0; i < row; i++)
@@ -28,23 +28,23 @@ void print_matrix(float** matrix, int row, int col)
 	cout << "}\n";
 }
 
-void free_mat(float** matrix, int row)
+void free_mat(float **matrix, int row)
 {
 	for (int i = 0; i < row; i++)
 		free(matrix[i]);
 }
 
-float* create_list(int size, float base=0, float coef = 0)
+float *create_list(int size, float base = 0, float coef = 0)
 {
-	float *list = new float[size];
+	float *list = (float *)_mm_malloc(sizeof(float) * size, sizeof(float) * 8);
 	for (int i = 0; i < size; i++)
-		list[i] = base + (i+1) * coef;
+		list[i] = base + (i + 1) * coef;
 	return list;
 }
 
-float** create_matrix(int row, int col)
+float **create_matrix(int row, int col)
 {
-	float **mat = new float*[row];
+	float **mat = (float **)_mm_malloc(sizeof(float *) * row, sizeof(float *) * 8);
 	for (int i = 0; i < row; i++)
 		mat[i] = create_list(col, 0, 0.1);
 	return mat;
@@ -52,50 +52,67 @@ float** create_matrix(int row, int col)
 
 class Layer
 {
-private:
-	float** weights;
-	float bais;
+protected:
+	float **weights;
+	float bias;
 	int input_size;
 	int output_size;
-	float* out;
+	float *out;
 
 public:
-	Layer(int input_size, int output_size)
+	Layer(int input_size, int output_size) : input_size(input_size), output_size(output_size), weights(nullptr), out(nullptr)
 	{
-		this->input_size = input_size;
-		this->output_size = output_size;
-		this->out = new float[output_size];
+		this->out = (float *)_mm_malloc(sizeof(float) * output_size, sizeof(float) * 8);
 	}
 
-	~Layer()
-	{
-		free(out);
-	}
-
-	void set_weights(float** weights, float bais)
+	void set_weights(float **weights, float bias)
 	{
 		this->weights = weights;
-		this->bais = bais;
+		this->bias = bias;
 	}
 
+	virtual float *forward(float *x) = 0;
+};
+
+class SerialLayer : public Layer
+{
+private:
 	float ReLU(float x)
 	{
-		return (0 < x) ? x : 0;
+		return (0.0 < x) ? x : 0.0;
 	}
 
-	float* forward(float* x)
+public:
+	SerialLayer(int input_size, int output_size)
+		: Layer(input_size, output_size) {}
+
+	float *forward(float *x)
 	{
 		for (int i = 0; i < output_size; i++)
-			out[i] = bais;
-			
+			out[i] = bias;
+
 		for (int i = 0; i < output_size; i++)
-			for (int j = 0; j < INPUT_SIZE; j++)
+			for (int j = 0; j < input_size; j++)
 				out[i] += x[j] * weights[i][j];
 
 		for (int i = 0; i < output_size; i++)
 			out[i] = ReLU(out[i]);
 
 		return out;
+	}
+};
+
+class ParallelLayer : public Layer
+{
+private:
+
+public:
+	ParallelLayer(int input_size, int output_size)
+		: Layer(input_size, output_size) {}
+
+	float *forward(float *x) override
+	{
+		return 0;
 	}
 };
 
@@ -107,61 +124,44 @@ int main(void)
 	// x = layer(x, OUTPUT_SIZE);
 
 	float *input = create_list(INPUT_SIZE, 0, 0.1);
-	cout << "input: ";	
+	cout << "input: ";
 	print_list(input, INPUT_SIZE);
-	
-	float** weights_l1 = create_matrix(HIDDEN_SIZE, INPUT_SIZE);
-	cout << "weight layer 1: \n";	
+
+	float **weights_l1 = create_matrix(HIDDEN_SIZE, INPUT_SIZE);
+	cout << "weight layer 1: \n";
 	print_matrix(weights_l1, HIDDEN_SIZE, INPUT_SIZE);
-	
-	float** weights_l2 = create_matrix(HIDDEN_SIZE, HIDDEN_SIZE);
-	cout << "weight layer 2: \n";	
+
+	float **weights_l2 = create_matrix(HIDDEN_SIZE, HIDDEN_SIZE);
+	cout << "weight layer 2: \n";
 	print_matrix(weights_l2, HIDDEN_SIZE, HIDDEN_SIZE);
-	
-	float** weights_l3 = create_matrix(OUTPUT_SIZE, HIDDEN_SIZE);
-	cout << "weight layer 3: \n";	
+
+	float **weights_l3 = create_matrix(OUTPUT_SIZE, HIDDEN_SIZE);
+	cout << "weight layer 3: \n";
 	print_matrix(weights_l3, OUTPUT_SIZE, HIDDEN_SIZE);
-	
-	// float *out_l1 = create_list(HIDDEN_SIZE);
-	// float *out_l2 = create_list(HIDDEN_SIZE);
-	// float *out_l3 = create_list(OUTPUT_SIZE);
-	
+
 	float bais_l1 = 1;
 	float bais_l2 = 2;
 	float bais_l3 = 3;
-	
-	
-	// for (int i = 0; i < HIDDEN_SIZE; i++)
-	// 	out_l1[i] = bais_l1;
-		
-	// for (int i = 0; i < HIDDEN_SIZE; i++)
-	// 	for (int j = 0; j < INPUT_SIZE; j++)
-	// 		out_l1[i] += input[j] * weights_l1[i][j];
 
-	// cout << "out_l1: ";	
-	// print_list(out_l1, HIDDEN_SIZE);
-	
-	Layer l1(INPUT_SIZE, HIDDEN_SIZE);
+	float *x = input;
+
+	SerialLayer l1(INPUT_SIZE, HIDDEN_SIZE);
 	l1.set_weights(weights_l1, bais_l1);
-	float* out_l1 = l1.forward(input);
+	x = l1.forward(x);
 	cout << "out_l1: ";
-	print_list(out_l1, HIDDEN_SIZE);
-	
-	Layer l2(HIDDEN_SIZE, HIDDEN_SIZE);
-	l2.set_weights(weights_l2, bais_l2);
-	float* out_l2 = l2.forward(out_l1);
-	cout << "out_l2: ";
-	print_list(out_l2, HIDDEN_SIZE);
+	print_list(x, HIDDEN_SIZE);
 
-	Layer l3(HIDDEN_SIZE, OUTPUT_SIZE);
+	SerialLayer l2(HIDDEN_SIZE, HIDDEN_SIZE);
+	l2.set_weights(weights_l2, bais_l2);
+	x = l2.forward(x);
+	cout << "out_l2: ";
+	print_list(x, HIDDEN_SIZE);
+
+	SerialLayer l3(HIDDEN_SIZE, OUTPUT_SIZE);
 	l3.set_weights(weights_l3, bais_l3);
-	float* out_l3 = l3.forward(out_l2);
+	x = l3.forward(x);
 	cout << "out_l3: ";
-	print_list(out_l3, OUTPUT_SIZE);
-	
-	free(input);
-	free_mat(weights_l1, HIDDEN_SIZE);
-	free_mat(weights_l2, HIDDEN_SIZE);
-	free_mat(weights_l3, OUTPUT_SIZE);
+	print_list(x, OUTPUT_SIZE);
+
 	return 0;
 }

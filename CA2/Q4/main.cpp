@@ -6,8 +6,8 @@
 
 using namespace std;
 
-const int INPUT_SIZE = 800;
-const int HIDDEN_SIZE = 16000;
+const int INPUT_SIZE = 8;
+const int HIDDEN_SIZE = 16;
 const int OUTPUT_SIZE = 8;
 
 void print_list(float *list, int size)

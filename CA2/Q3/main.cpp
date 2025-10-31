@@ -204,68 +204,124 @@ public:
 class SobelSIMD : public Sobel
 {
 private:
-    void apply_for_32_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col, unsigned char *out_image)
+    void accumulate_kernel_product(int kernel_value,
+                                    const __m256i &p_16_low, const __m256i &p_16_high,
+                                    __m256i &acc_low, __m256i &acc_high)
+    {
+        // Only perform calculations if the kernel weight is not zero
+        if (kernel_value != 0)
+        {
+            // Set a 256-bit register with 16 copies of the 16-bit kernel value
+            __m256i k_value = _mm256_set1_epi16((short int)kernel_value);
+
+            // Multiply kernel value by low pixel data and accumulate
+            __m256i multi_low = _mm256_mullo_epi16(k_value, p_16_low);
+            acc_low = _mm256_add_epi16(multi_low, acc_low);
+
+            // Multiply kernel value by high pixel data and accumulate
+            __m256i multi_high = _mm256_mullo_epi16(k_value, p_16_high);
+            acc_high = _mm256_add_epi16(multi_high, acc_high);
+        }
+    }
+
+    void apply_sobel_kernels(const unsigned char *in_image, int row, unsigned int NCOLS, int col,
+                             __m256i &gx_16_low, __m256i &gx_16_high,
+                             __m256i &gy_16_low, __m256i &gy_16_high)
     {
         __m256i p_8, p_16_low, p_16_high;
-        __m256i gx_16_low, gx_16_high, gy_16_low, gy_16_high;
-        __m256i gx_32_a, gx_32_b, gx_32_c, gx_32_d;
-        __m256i gy_32_a, gy_32_b, gy_32_c, gy_32_d;
-        __m256i gx_squared_a, gx_squared_b, gx_squared_c, gx_squared_d;
-        __m256i gy_squared_a, gy_squared_b, gy_squared_c, gy_squared_d;
-        __m256i sum_a, sum_b, sum_c, sum_d;
-        __m256 sqrt_a, sqrt_b, sqrt_c, sqrt_d;
-        __m256i result_a, result_b, result_c, result_d;
-        __m256i packed_ab, packed_cd, final_packed, reordered;
         __m256i zero = _mm256_setzero_si256();
-        __m256i max255 = _mm256_set1_epi32(255);
 
         gx_16_low = zero;
         gx_16_high = zero;
         gy_16_low = zero;
         gy_16_high = zero;
 
-        // Apply Sobel kernels
         for (int i = 0; i < 3; i++)
         {
             for (int j = 0; j < 3; j++)
             {
+                // Load 32 pixels (8-bit)
                 p_8 = _mm256_loadu_si256((__m256i const *)&in_image[(row + i - 1) * NCOLS + col + j - 1]);
 
+                // Unpack 8-bit to 16-bit (with zero extension)
                 p_16_low = _mm256_unpacklo_epi8(p_8, zero);
                 p_16_high = _mm256_unpackhi_epi8(p_8, zero);
 
-                if (kernel_x[i][j] != 0)
-                {
-                    __m256i kx_value = _mm256_set1_epi16((short int)kernel_x[i][j]);
-                    __m256i multi_x_low = _mm256_mullo_epi16(kx_value, p_16_low);
-                    __m256i multi_x_high = _mm256_mullo_epi16(kx_value, p_16_high);
-                    gx_16_low = _mm256_add_epi16(multi_x_low, gx_16_low);
-                    gx_16_high = _mm256_add_epi16(multi_x_high, gx_16_high);
-                }
+                // Apply Gx kernel
+                accumulate_kernel_product(kernel_x[i][j],
+                                           p_16_low, p_16_high,
+                                           gx_16_low, gx_16_high);
 
-                if (kernel_y[i][j] != 0)
-                {
-                    __m256i ky_value = _mm256_set1_epi16((short int)kernel_y[i][j]);
-                    __m256i multi_y_low = _mm256_mullo_epi16(ky_value, p_16_low);
-                    __m256i multi_y_high = _mm256_mullo_epi16(ky_value, p_16_high);
-                    gy_16_low = _mm256_add_epi16(multi_y_low, gy_16_low);
-                    gy_16_high = _mm256_add_epi16(multi_y_high, gy_16_high);
-                }
+                // Apply Gy kernel
+                accumulate_kernel_product(kernel_y[i][j],
+                                           p_16_low, p_16_high,
+                                           gy_16_low, gy_16_high);
             }
         }
+    }
 
-        // Convert 16-bit gradients to 32-bit for squaring and sqrt
-        gx_32_a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gx_16_low, 0));
-        gx_32_b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gx_16_low, 1));
-        gx_32_c = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gx_16_high, 0));
-        gx_32_d = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gx_16_high, 1));
+    void calculate_magnitude(const __m256i &gx_16_low, const __m256i &gx_16_high,
+                             const __m256i &gy_16_low, const __m256i &gy_16_high,
+                             __m256i &result_a, __m256i &result_b,
+                             __m256i &result_c, __m256i &result_d)
+    {
+        __m256i gx_32_a, gx_32_b, gx_32_c, gx_32_d;
+        __m256i gy_32_a, gy_32_b, gy_32_c, gy_32_d;
+        __m256i gx_squared_a, gx_squared_b, gx_squared_c, gx_squared_d;
+        __m256i gy_squared_a, gy_squared_b, gy_squared_c, gy_squared_d;
+        __m256i sum_a, sum_b, sum_c, sum_d;
+        __m256 sqrt_a, sqrt_b, sqrt_c, sqrt_d;
 
-        gy_32_a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_low, 0));
-        gy_32_b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_low, 1));
-        gy_32_c = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_high, 0));
-        gy_32_d = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_high, 1));
+        convert_gradients_16bit_to_32(gx_32_a, gx_16_low, gx_32_b, gx_32_c, gx_16_high, gx_32_d,
+                                      gy_32_a, gy_16_low, gy_32_b, gy_32_c, gy_16_high, gy_32_d);
 
-        // Square the gradients (gx^2 + gy^2)
+        // gx^2 + gy^2
+        square_gradients(gx_squared_a, gx_32_a, gx_squared_b, gx_32_b, gx_squared_c, gx_32_c, gx_squared_d, gx_32_d,
+                         gy_squared_a, gy_32_a, gy_squared_b, gy_32_b, gy_squared_c, gy_32_c, gy_squared_d, gy_32_d);
+
+        // Sum gx^2 + gy^2
+        sum_gx_gy(sum_a, gx_squared_a, gy_squared_a, sum_b, gx_squared_b, gy_squared_b, sum_c,
+                  gx_squared_c, gy_squared_c, sum_d, gx_squared_d, gy_squared_d);
+
+        // Convert to float, compute sqrt, convert back to int
+        sqrt_g_sum(sqrt_a, sum_a, sqrt_b, sum_b, sqrt_c, sum_c, sqrt_d, sum_d);
+
+        convert_float_to_int(result_a, sqrt_a, result_b, sqrt_b, result_c, sqrt_c, result_d, sqrt_d);
+    }
+
+    void convert_float_to_int(__m256i &result_a, const __m256 &sqrt_a, __m256i &result_b, const __m256 &sqrt_b,
+                              __m256i &result_c, const __m256 &sqrt_c, __m256i &result_d, const __m256 &sqrt_d)
+    {
+        result_a = _mm256_cvtps_epi32(sqrt_a);
+        result_b = _mm256_cvtps_epi32(sqrt_b);
+        result_c = _mm256_cvtps_epi32(sqrt_c);
+        result_d = _mm256_cvtps_epi32(sqrt_d);
+    }
+
+    void sqrt_g_sum(__m256 &sqrt_a, const __m256i &sum_a, __m256 &sqrt_b, const __m256i &sum_b,
+                    __m256 &sqrt_c, const __m256i &sum_c, __m256 &sqrt_d, const __m256i &sum_d)
+    {
+        sqrt_a = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_a));
+        sqrt_b = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_b));
+        sqrt_c = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_c));
+        sqrt_d = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_d));
+    }
+
+    void sum_gx_gy(__m256i &sum_a, const __m256i &gx_squared_a, const __m256i &gy_squared_a, __m256i &sum_b,
+                   const __m256i &gx_squared_b, const __m256i &gy_squared_b, __m256i &sum_c, const __m256i &gx_squared_c,
+                   const __m256i &gy_squared_c, __m256i &sum_d, const __m256i &gx_squared_d, const __m256i &gy_squared_d)
+    {
+        sum_a = _mm256_add_epi32(gx_squared_a, gy_squared_a);
+        sum_b = _mm256_add_epi32(gx_squared_b, gy_squared_b);
+        sum_c = _mm256_add_epi32(gx_squared_c, gy_squared_c);
+        sum_d = _mm256_add_epi32(gx_squared_d, gy_squared_d);
+    }
+
+    void square_gradients(__m256i &gx_squared_a, const __m256i &gx_32_a, __m256i &gx_squared_b,
+                          const __m256i &gx_32_b, __m256i &gx_squared_c, const __m256i &gx_32_c, __m256i &gx_squared_d,
+                          const __m256i &gx_32_d, __m256i &gy_squared_a, const __m256i &gy_32_a, __m256i &gy_squared_b,
+                          const __m256i &gy_32_b, __m256i &gy_squared_c, const __m256i &gy_32_c, __m256i &gy_squared_d, const __m256i &gy_32_d)
+    {
         gx_squared_a = _mm256_mullo_epi32(gx_32_a, gx_32_a);
         gx_squared_b = _mm256_mullo_epi32(gx_32_b, gx_32_b);
         gx_squared_c = _mm256_mullo_epi32(gx_32_c, gx_32_c);
@@ -275,48 +331,91 @@ private:
         gy_squared_b = _mm256_mullo_epi32(gy_32_b, gy_32_b);
         gy_squared_c = _mm256_mullo_epi32(gy_32_c, gy_32_c);
         gy_squared_d = _mm256_mullo_epi32(gy_32_d, gy_32_d);
+    }
 
-        // Sum gx^2 + gy^2
-        sum_a = _mm256_add_epi32(gx_squared_a, gy_squared_a);
-        sum_b = _mm256_add_epi32(gx_squared_b, gy_squared_b);
-        sum_c = _mm256_add_epi32(gx_squared_c, gy_squared_c);
-        sum_d = _mm256_add_epi32(gx_squared_d, gy_squared_d);
+    void convert_gradients_16bit_to_32(__m256i &gx_32_a, const __m256i &gx_16_low, __m256i &gx_32_b, __m256i &gx_32_c,
+                                       const __m256i &gx_16_high, __m256i &gx_32_d, __m256i &gy_32_a, const __m256i &gy_16_low,
+                                       __m256i &gy_32_b, __m256i &gy_32_c, const __m256i &gy_16_high, __m256i &gy_32_d)
+    {
+        // Convert 16-bit gradients to 32-bit for squaring and sqrt
+        // Extract 128-bit lanes and convert
+        gx_32_a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gx_16_low, 0));
+        gx_32_b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gx_16_low, 1));
+        gx_32_c = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gx_16_high, 0));
+        gx_32_d = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gx_16_high, 1));
 
-        // Convert to float, compute sqrt, convert back to int
-        sqrt_a = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_a));
-        sqrt_b = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_b));
-        sqrt_c = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_c));
-        sqrt_d = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_d));
+        gy_32_a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_low, 0));
+        gy_32_b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_low, 1));
+        gy_32_c = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_high, 0));
+        gy_32_d = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_high, 1));
+    }
 
-        result_a = _mm256_cvtps_epi32(sqrt_a);
-        result_b = _mm256_cvtps_epi32(sqrt_b);
-        result_c = _mm256_cvtps_epi32(sqrt_c);
-        result_d = _mm256_cvtps_epi32(sqrt_d);
+    void pack_and_store_results(__m256i &result_a, __m256i &result_b,
+                                __m256i &result_c, __m256i &result_d,
+                                unsigned char *out_image, int row, unsigned int NCOLS, int col)
+    {
+        clamp_results(result_a, result_b, result_c, result_d);
 
-        // Clamp to [0, 255]
-        result_a = _mm256_min_epi32(result_a, max255);
-        result_b = _mm256_min_epi32(result_b, max255);
-        result_c = _mm256_min_epi32(result_c, max255);
-        result_d = _mm256_min_epi32(result_d, max255);
+        __m256i reordered;
+        reduce_and_reorder_results(result_a, result_b, result_c, result_d, reordered);
 
-        result_a = _mm256_max_epi32(result_a, zero);
-        result_b = _mm256_max_epi32(result_b, zero);
-        result_c = _mm256_max_epi32(result_c, zero);
-        result_d = _mm256_max_epi32(result_d, zero);
+        // Store 32 bytes
+        _mm256_storeu_si256((__m256i_u *)&out_image[row * NCOLS + col], reordered);
+    }
 
-        // Pack 32-bit -> 16-bit (maintaining correct order)
+    void reduce_and_reorder_results(__m256i &result_a, __m256i &result_b, __m256i &result_c, __m256i &result_d, __m256i &reordered)
+    {
+        __m256i packed_ab, packed_cd, final_packed;
+
+        // Pack 32-bit -> 16-bit [b0-3|a0-3] [b4-7|a4-7]
         packed_ab = _mm256_packus_epi32(result_a, result_b);
         packed_cd = _mm256_packus_epi32(result_c, result_d);
 
         // Permute to fix lane crossing: [a0-7, b0-7, a8-15, b8-15] -> [a0-15, b0-15]
         packed_ab = _mm256_permute4x64_epi64(packed_ab, (3 << 6) | (1 << 4) | (2 << 2) | 0);
         packed_cd = _mm256_permute4x64_epi64(packed_cd, (3 << 6) | (1 << 4) | (2 << 2) | 0);
-        
-        final_packed = _mm256_packus_epi16(packed_ab, packed_cd);
-        
-        reordered = _mm256_permute4x64_epi64(final_packed, (3 << 6) | (2 << 4) | (1 << 2) | 0);
 
-        _mm256_storeu_si256((__m256i_u *)&out_image[row * NCOLS + col], reordered);
+        // Pack 16-bit -> 8-bit
+        // This pack correctly orders the pixels: [d | c | b | a] (conceptual)
+        final_packed = _mm256_packus_epi16(packed_ab, packed_cd);
+
+        // Permute to final storage order: [d | c | b | a] -> [a | b | c | d]
+        reordered = _mm256_permute4x64_epi64(final_packed, (3 << 6) | (2 << 4) | (1 << 2) | 0);
+    }
+
+    void clamp_results(__m256i &result_a, __m256i &result_b, __m256i &result_c, __m256i &result_d)
+    {
+        __m256i zero = _mm256_setzero_si256();
+        __m256i max255 = _mm256_set1_epi32(255);
+
+        result_a = _mm256_min_epi32(result_a, max255);
+        result_a = _mm256_max_epi32(result_a, zero);
+
+        result_b = _mm256_min_epi32(result_b, max255);
+        result_b = _mm256_max_epi32(result_b, zero);
+
+        result_c = _mm256_min_epi32(result_c, max255);
+        result_c = _mm256_max_epi32(result_c, zero);
+
+        result_d = _mm256_min_epi32(result_d, max255);
+        result_d = _mm256_max_epi32(result_d, zero);
+    }
+
+    void apply_for_32_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col, unsigned char *out_image)
+    {
+        // Step 1: Apply Sobel kernels to get 16-bit gradients
+        __m256i gx_16_low, gx_16_high, gy_16_low, gy_16_high;
+        apply_sobel_kernels(in_image, row, NCOLS, col,
+                            gx_16_low, gx_16_high, gy_16_low, gy_16_high);
+
+        // Step 2: Calculate magnitude (sqrt(gx^2 + gy^2)) as 32-bit integers
+        __m256i result_a, result_b, result_c, result_d;
+        calculate_magnitude(gx_16_low, gx_16_high, gy_16_low, gy_16_high,
+                            result_a, result_b, result_c, result_d);
+
+        // Step 3: Clamp to [0, 255], pack to 8-bit, reorder, and store
+        pack_and_store_results(result_a, result_b, result_c, result_d,
+                               out_image, row, NCOLS, col);
     }
 
 public:
@@ -406,17 +505,17 @@ int main()
     time4 = end - start;
 
     // --- Display Images ---
-    cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
-    cv::imshow("input image", in_img);
+    // cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("input image", in_img);
 
-    cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
-    cv::imshow("blur(serial)", b_img_serial);
+    // cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("blur(serial)", b_img_serial);
 
-    cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
-    cv::imshow("blur(SIMD)", b_img_simd);
+    // cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("blur(SIMD)", b_img_simd);
 
-    cv::namedWindow("sobel(serial)", cv::WINDOW_AUTOSIZE);
-    cv::imshow("sobel(serial)", out_img_serial);
+    // cv::namedWindow("sobel(serial)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("sobel(serial)", out_img_serial);
 
     cv::namedWindow("sobel(SIMD)", cv::WINDOW_AUTOSIZE);
     cv::imshow("sobel(SIMD)", out_img_simd);
@@ -426,12 +525,10 @@ int main()
     printf("\n--- Pixel Comparison (Sobel)---\n");
     compareImages(out_img_serial, out_img_simd);
 
-
     printf("\n\n--- Blur Timings ---\n");
     printf("Serial Run time = %u \n", (Ipp32s)time1);
     printf("Parallel Run time = %u \n", (Ipp32s)time2);
     printf("Speedup = %f\n\n", (float)(time1) / (float)time2);
-
 
     printf("\n--- Sobel Timings ---\n");
     printf("Serial Run time = %u \n", (Ipp32s)time3);
@@ -444,7 +541,6 @@ int main()
     printf("Serial Total Run time = %u \n", (Ipp32s)total_serial_time);
     printf("Parallel Total Run time = %u \n", (Ipp32s)total_parallel_time);
     printf("Total Speedup = %f\n\n", (float)(total_serial_time) / (float)total_parallel_time);
-
 
     cv::waitKey(0);
     return 0;

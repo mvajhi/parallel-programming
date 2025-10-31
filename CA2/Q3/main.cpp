@@ -205,8 +205,8 @@ class SobelSIMD : public Sobel
 {
 private:
     inline void accumulate_kernel_product(int kernel_value,
-                                    const __m256i &p_16_low, const __m256i &p_16_high,
-                                    __m256i &acc_low, __m256i &acc_high)
+                                          const __m256i &p_16_low, const __m256i &p_16_high,
+                                          __m256i &acc_low, __m256i &acc_high)
     {
         // Only perform calculations if the kernel weight is not zero
         if (kernel_value != 0)
@@ -225,8 +225,8 @@ private:
     }
 
     inline void apply_sobel_kernels(const unsigned char *in_image, int row, unsigned int NCOLS, int col,
-                             __m256i &gx_16_low, __m256i &gx_16_high,
-                             __m256i &gy_16_low, __m256i &gy_16_high)
+                                    __m256i &gx_16_low, __m256i &gx_16_high,
+                                    __m256i &gy_16_low, __m256i &gy_16_high)
     {
         __m256i p_8, p_16_low, p_16_high;
         __m256i zero = _mm256_setzero_si256();
@@ -249,21 +249,21 @@ private:
 
                 // Apply Gx kernel
                 accumulate_kernel_product(kernel_x[i][j],
-                                           p_16_low, p_16_high,
-                                           gx_16_low, gx_16_high);
+                                          p_16_low, p_16_high,
+                                          gx_16_low, gx_16_high);
 
                 // Apply Gy kernel
                 accumulate_kernel_product(kernel_y[i][j],
-                                           p_16_low, p_16_high,
-                                           gy_16_low, gy_16_high);
+                                          p_16_low, p_16_high,
+                                          gy_16_low, gy_16_high);
             }
         }
     }
 
     inline void calculate_magnitude(const __m256i &gx_16_low, const __m256i &gx_16_high,
-                             const __m256i &gy_16_low, const __m256i &gy_16_high,
-                             __m256i &result_a, __m256i &result_b,
-                             __m256i &result_c, __m256i &result_d)
+                                    const __m256i &gy_16_low, const __m256i &gy_16_high,
+                                    __m256i &result_a, __m256i &result_b,
+                                    __m256i &result_c, __m256i &result_d)
     {
         __m256i gx_32_a, gx_32_b, gx_32_c, gx_32_d;
         __m256i gy_32_a, gy_32_b, gy_32_c, gy_32_d;
@@ -290,7 +290,7 @@ private:
     }
 
     inline void convert_float_to_int(__m256i &result_a, const __m256 &sqrt_a, __m256i &result_b, const __m256 &sqrt_b,
-                              __m256i &result_c, const __m256 &sqrt_c, __m256i &result_d, const __m256 &sqrt_d)
+                                     __m256i &result_c, const __m256 &sqrt_c, __m256i &result_d, const __m256 &sqrt_d)
     {
         result_a = _mm256_cvtps_epi32(sqrt_a);
         result_b = _mm256_cvtps_epi32(sqrt_b);
@@ -299,7 +299,7 @@ private:
     }
 
     inline void sqrt_g_sum(__m256 &sqrt_a, const __m256i &sum_a, __m256 &sqrt_b, const __m256i &sum_b,
-                    __m256 &sqrt_c, const __m256i &sum_c, __m256 &sqrt_d, const __m256i &sum_d)
+                           __m256 &sqrt_c, const __m256i &sum_c, __m256 &sqrt_d, const __m256i &sum_d)
     {
         sqrt_a = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_a));
         sqrt_b = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_b));
@@ -308,8 +308,8 @@ private:
     }
 
     inline void sum_gx_gy(__m256i &sum_a, const __m256i &gx_squared_a, const __m256i &gy_squared_a, __m256i &sum_b,
-                   const __m256i &gx_squared_b, const __m256i &gy_squared_b, __m256i &sum_c, const __m256i &gx_squared_c,
-                   const __m256i &gy_squared_c, __m256i &sum_d, const __m256i &gx_squared_d, const __m256i &gy_squared_d)
+                          const __m256i &gx_squared_b, const __m256i &gy_squared_b, __m256i &sum_c, const __m256i &gx_squared_c,
+                          const __m256i &gy_squared_c, __m256i &sum_d, const __m256i &gx_squared_d, const __m256i &gy_squared_d)
     {
         sum_a = _mm256_add_epi32(gx_squared_a, gy_squared_a);
         sum_b = _mm256_add_epi32(gx_squared_b, gy_squared_b);
@@ -318,9 +318,9 @@ private:
     }
 
     inline void square_gradients(__m256i &gx_squared_a, const __m256i &gx_32_a, __m256i &gx_squared_b,
-                          const __m256i &gx_32_b, __m256i &gx_squared_c, const __m256i &gx_32_c, __m256i &gx_squared_d,
-                          const __m256i &gx_32_d, __m256i &gy_squared_a, const __m256i &gy_32_a, __m256i &gy_squared_b,
-                          const __m256i &gy_32_b, __m256i &gy_squared_c, const __m256i &gy_32_c, __m256i &gy_squared_d, const __m256i &gy_32_d)
+                                 const __m256i &gx_32_b, __m256i &gx_squared_c, const __m256i &gx_32_c, __m256i &gx_squared_d,
+                                 const __m256i &gx_32_d, __m256i &gy_squared_a, const __m256i &gy_32_a, __m256i &gy_squared_b,
+                                 const __m256i &gy_32_b, __m256i &gy_squared_c, const __m256i &gy_32_c, __m256i &gy_squared_d, const __m256i &gy_32_d)
     {
         gx_squared_a = _mm256_mullo_epi32(gx_32_a, gx_32_a);
         gx_squared_b = _mm256_mullo_epi32(gx_32_b, gx_32_b);
@@ -334,8 +334,8 @@ private:
     }
 
     inline void convert_gradients_16bit_to_32(__m256i &gx_32_a, const __m256i &gx_16_low, __m256i &gx_32_b, __m256i &gx_32_c,
-                                       const __m256i &gx_16_high, __m256i &gx_32_d, __m256i &gy_32_a, const __m256i &gy_16_low,
-                                       __m256i &gy_32_b, __m256i &gy_32_c, const __m256i &gy_16_high, __m256i &gy_32_d)
+                                              const __m256i &gx_16_high, __m256i &gx_32_d, __m256i &gy_32_a, const __m256i &gy_16_low,
+                                              __m256i &gy_32_b, __m256i &gy_32_c, const __m256i &gy_16_high, __m256i &gy_32_d)
     {
         // Convert 16-bit gradients to 32-bit for squaring and sqrt
         // Extract 128-bit lanes and convert
@@ -351,8 +351,8 @@ private:
     }
 
     inline void pack_and_store_results(__m256i &result_a, __m256i &result_b,
-                                __m256i &result_c, __m256i &result_d,
-                                unsigned char *out_image, int row, unsigned int NCOLS, int col)
+                                       __m256i &result_c, __m256i &result_d,
+                                       unsigned char *out_image, int row, unsigned int NCOLS, int col)
     {
         clamp_results(result_a, result_b, result_c, result_d);
 
@@ -500,7 +500,7 @@ int main()
 
     start = ippGetCpuClocks();
     SobelSIMD sobel_operator_simd;
-    cv::Mat out_img_simd = sobel_operator_simd.apply(b_img_simd); 
+    cv::Mat out_img_simd = sobel_operator_simd.apply(b_img_simd);
     end = ippGetCpuClocks();
     time4 = end - start;
 

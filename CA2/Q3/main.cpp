@@ -2,6 +2,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <cmath>
+#include "ipp.h"
 
 class Blur
 {
@@ -97,14 +98,23 @@ public:
 
 int main()
 {
+    Ipp64u time1, time2;
+    Ipp64u start, end;
     cv::Mat in_img;
     in_img = cv::imread("base.jpg", cv::IMREAD_GRAYSCALE);
-
+    
+	start = ippGetCpuClocks();
     Blur blur_operator;
     cv::Mat b_img = blur_operator.apply(in_img);
-
+    
     Sobel sobel_operator;
     cv::Mat out_img = sobel_operator.apply(b_img);
+	end = ippGetCpuClocks();
+    time1 = end - start;
+
+    start = ippGetCpuClocks();
+    end = ippGetCpuClocks();
+    time2 = end - start;
 
     cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
     cv::imshow("input image", in_img);
@@ -118,6 +128,10 @@ int main()
     cv::resize(out_img, show_out_img, cv::Size(), 1, 1);
     cv::namedWindow("output(serial)", cv::WINDOW_AUTOSIZE);
     cv::imshow("output(serial)", show_out_img);
+
+	printf ("Serial Run time = %u \n", (Ipp32s) time1);
+	printf ("Parallel Run time = %u \n", (Ipp32s) time2);
+	printf ("Speedup = %f\n\n", (float) (time1)/(float) time2);
 
     cv::waitKey(0);
     return 0;

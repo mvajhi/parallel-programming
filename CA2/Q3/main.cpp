@@ -6,7 +6,7 @@
 
 class Blur
 {
-private:
+protected:
     const int kernel[3][3] = {
         {1, 2, 1},
         {2, 4, 2},
@@ -14,6 +14,16 @@ private:
 
     const int normalizationFactor = 16;
 
+public:
+    Blur() {}
+    ~Blur() {}
+
+    virtual cv::Mat apply(const cv::Mat &in_img) = 0;
+};
+
+class BlurSerial : public Blur
+{
+private:
     unsigned char apply_for_one_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col)
     {
         int pixel = 0;
@@ -24,9 +34,6 @@ private:
     }
 
 public:
-    Blur() {}
-    ~Blur() {}
-
     cv::Mat apply(const cv::Mat &in_img)
     {
         unsigned int NCOLS = in_img.cols;
@@ -46,7 +53,7 @@ public:
 
 class Sobel
 {
-private:
+protected:
     const int kernel_x[3][3] = {
         {-1, 0, 1},
         {-2, 0, 2},
@@ -57,6 +64,16 @@ private:
         {0, 0, 0},
         {1, 2, 1}};
 
+public:
+    Sobel() {}
+    ~Sobel() {}
+
+    virtual cv::Mat apply(const cv::Mat &in_img) = 0;
+};
+
+class SobelSerial : public Sobel
+{
+private:
     unsigned char apply_for_one_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col)
     {
         int gx = 0;
@@ -76,10 +93,7 @@ private:
     }
 
 public:
-    Sobel() {}
-    ~Sobel() {}
-
-    cv::Mat apply(const cv::Mat &in_img)
+    cv::Mat apply(const cv::Mat &in_img) override
     {
         unsigned int NCOLS = in_img.cols;
         unsigned int NROWS = in_img.rows;
@@ -102,14 +116,14 @@ int main()
     Ipp64u start, end;
     cv::Mat in_img;
     in_img = cv::imread("base.jpg", cv::IMREAD_GRAYSCALE);
-    
-	start = ippGetCpuClocks();
-    Blur blur_operator;
+
+    start = ippGetCpuClocks();
+    BlurSerial blur_operator;
     cv::Mat b_img = blur_operator.apply(in_img);
-    
-    Sobel sobel_operator;
+
+    SobelSerial sobel_operator;
     cv::Mat out_img = sobel_operator.apply(b_img);
-	end = ippGetCpuClocks();
+    end = ippGetCpuClocks();
     time1 = end - start;
 
     start = ippGetCpuClocks();
@@ -129,9 +143,9 @@ int main()
     cv::namedWindow("output(serial)", cv::WINDOW_AUTOSIZE);
     cv::imshow("output(serial)", show_out_img);
 
-	printf ("Serial Run time = %u \n", (Ipp32s) time1);
-	printf ("Parallel Run time = %u \n", (Ipp32s) time2);
-	printf ("Speedup = %f\n\n", (float) (time1)/(float) time2);
+    printf("Serial Run time = %u \n", (Ipp32s)time1);
+    printf("Parallel Run time = %u \n", (Ipp32s)time2);
+    printf("Speedup = %f\n\n", (float)(time1) / (float)time2);
 
     cv::waitKey(0);
     return 0;

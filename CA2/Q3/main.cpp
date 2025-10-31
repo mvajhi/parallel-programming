@@ -56,7 +56,7 @@ public:
 class BlurSIMD : public Blur
 {
 private:
-    void apply_for_16_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col, unsigned char *out_image)
+    void apply_for_32_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col, unsigned char *out_image)
     {
         __m256i p_8, p_16_low, p_16_high, k_value;
         __m256i multi_p_16_low, multi_p_16_high;
@@ -128,7 +128,7 @@ public:
         for (int row = 1; row < NROWS - 1; row++)
             for (int col = 1; col < NCOLS - 1; col += 32)
             {
-                apply_for_16_pixel(in_image, row, NCOLS, col, out_image);
+                apply_for_32_pixel(in_image, row, NCOLS, col, out_image);
                 if (col == 1)
                     out_image[(row * NCOLS) + 0] = 0;
                 else if (!(col + 32 < NCOLS - 1))
@@ -275,7 +275,7 @@ private:
         convert_gradients_16bit_to_32(gx_32_a, gx_16_low, gx_32_b, gx_32_c, gx_16_high, gx_32_d,
                                       gy_32_a, gy_16_low, gy_32_b, gy_32_c, gy_16_high, gy_32_d);
 
-        // gx^2 + gy^2
+        // gx^2 , gy^2
         square_gradients(gx_squared_a, gx_32_a, gx_squared_b, gx_32_b, gx_squared_c, gx_32_c, gx_squared_d, gx_32_d,
                          gy_squared_a, gy_32_a, gy_squared_b, gy_32_b, gy_squared_c, gy_32_c, gy_squared_d, gy_32_d);
 
@@ -359,7 +359,6 @@ private:
         __m256i reordered;
         reduce_and_reorder_results(result_a, result_b, result_c, result_d, reordered);
 
-        // Store 32 bytes
         _mm256_storeu_si256((__m256i_u *)&out_image[row * NCOLS + col], reordered);
     }
 
@@ -376,7 +375,7 @@ private:
         packed_cd = _mm256_permute4x64_epi64(packed_cd, (3 << 6) | (1 << 4) | (2 << 2) | 0);
 
         // Pack 16-bit -> 8-bit
-        // This pack correctly orders the pixels: [d | c | b | a] (conceptual)
+        // This pack correctly orders the pixels: [d | c | b | a]
         final_packed = _mm256_packus_epi16(packed_ab, packed_cd);
 
         // Permute to final storage order: [d | c | b | a] -> [a | b | c | d]

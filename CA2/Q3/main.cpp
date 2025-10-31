@@ -204,7 +204,7 @@ public:
 class SobelSIMD : public Sobel
 {
 private:
-    void accumulate_kernel_product(int kernel_value,
+    inline void accumulate_kernel_product(int kernel_value,
                                     const __m256i &p_16_low, const __m256i &p_16_high,
                                     __m256i &acc_low, __m256i &acc_high)
     {
@@ -224,7 +224,7 @@ private:
         }
     }
 
-    void apply_sobel_kernels(const unsigned char *in_image, int row, unsigned int NCOLS, int col,
+    inline void apply_sobel_kernels(const unsigned char *in_image, int row, unsigned int NCOLS, int col,
                              __m256i &gx_16_low, __m256i &gx_16_high,
                              __m256i &gy_16_low, __m256i &gy_16_high)
     {
@@ -260,7 +260,7 @@ private:
         }
     }
 
-    void calculate_magnitude(const __m256i &gx_16_low, const __m256i &gx_16_high,
+    inline void calculate_magnitude(const __m256i &gx_16_low, const __m256i &gx_16_high,
                              const __m256i &gy_16_low, const __m256i &gy_16_high,
                              __m256i &result_a, __m256i &result_b,
                              __m256i &result_c, __m256i &result_d)
@@ -289,7 +289,7 @@ private:
         convert_float_to_int(result_a, sqrt_a, result_b, sqrt_b, result_c, sqrt_c, result_d, sqrt_d);
     }
 
-    void convert_float_to_int(__m256i &result_a, const __m256 &sqrt_a, __m256i &result_b, const __m256 &sqrt_b,
+    inline void convert_float_to_int(__m256i &result_a, const __m256 &sqrt_a, __m256i &result_b, const __m256 &sqrt_b,
                               __m256i &result_c, const __m256 &sqrt_c, __m256i &result_d, const __m256 &sqrt_d)
     {
         result_a = _mm256_cvtps_epi32(sqrt_a);
@@ -298,7 +298,7 @@ private:
         result_d = _mm256_cvtps_epi32(sqrt_d);
     }
 
-    void sqrt_g_sum(__m256 &sqrt_a, const __m256i &sum_a, __m256 &sqrt_b, const __m256i &sum_b,
+    inline void sqrt_g_sum(__m256 &sqrt_a, const __m256i &sum_a, __m256 &sqrt_b, const __m256i &sum_b,
                     __m256 &sqrt_c, const __m256i &sum_c, __m256 &sqrt_d, const __m256i &sum_d)
     {
         sqrt_a = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_a));
@@ -307,7 +307,7 @@ private:
         sqrt_d = _mm256_sqrt_ps(_mm256_cvtepi32_ps(sum_d));
     }
 
-    void sum_gx_gy(__m256i &sum_a, const __m256i &gx_squared_a, const __m256i &gy_squared_a, __m256i &sum_b,
+    inline void sum_gx_gy(__m256i &sum_a, const __m256i &gx_squared_a, const __m256i &gy_squared_a, __m256i &sum_b,
                    const __m256i &gx_squared_b, const __m256i &gy_squared_b, __m256i &sum_c, const __m256i &gx_squared_c,
                    const __m256i &gy_squared_c, __m256i &sum_d, const __m256i &gx_squared_d, const __m256i &gy_squared_d)
     {
@@ -317,7 +317,7 @@ private:
         sum_d = _mm256_add_epi32(gx_squared_d, gy_squared_d);
     }
 
-    void square_gradients(__m256i &gx_squared_a, const __m256i &gx_32_a, __m256i &gx_squared_b,
+    inline void square_gradients(__m256i &gx_squared_a, const __m256i &gx_32_a, __m256i &gx_squared_b,
                           const __m256i &gx_32_b, __m256i &gx_squared_c, const __m256i &gx_32_c, __m256i &gx_squared_d,
                           const __m256i &gx_32_d, __m256i &gy_squared_a, const __m256i &gy_32_a, __m256i &gy_squared_b,
                           const __m256i &gy_32_b, __m256i &gy_squared_c, const __m256i &gy_32_c, __m256i &gy_squared_d, const __m256i &gy_32_d)
@@ -333,7 +333,7 @@ private:
         gy_squared_d = _mm256_mullo_epi32(gy_32_d, gy_32_d);
     }
 
-    void convert_gradients_16bit_to_32(__m256i &gx_32_a, const __m256i &gx_16_low, __m256i &gx_32_b, __m256i &gx_32_c,
+    inline void convert_gradients_16bit_to_32(__m256i &gx_32_a, const __m256i &gx_16_low, __m256i &gx_32_b, __m256i &gx_32_c,
                                        const __m256i &gx_16_high, __m256i &gx_32_d, __m256i &gy_32_a, const __m256i &gy_16_low,
                                        __m256i &gy_32_b, __m256i &gy_32_c, const __m256i &gy_16_high, __m256i &gy_32_d)
     {
@@ -350,7 +350,7 @@ private:
         gy_32_d = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(gy_16_high, 1));
     }
 
-    void pack_and_store_results(__m256i &result_a, __m256i &result_b,
+    inline void pack_and_store_results(__m256i &result_a, __m256i &result_b,
                                 __m256i &result_c, __m256i &result_d,
                                 unsigned char *out_image, int row, unsigned int NCOLS, int col)
     {
@@ -363,7 +363,7 @@ private:
         _mm256_storeu_si256((__m256i_u *)&out_image[row * NCOLS + col], reordered);
     }
 
-    void reduce_and_reorder_results(__m256i &result_a, __m256i &result_b, __m256i &result_c, __m256i &result_d, __m256i &reordered)
+    inline void reduce_and_reorder_results(__m256i &result_a, __m256i &result_b, __m256i &result_c, __m256i &result_d, __m256i &reordered)
     {
         __m256i packed_ab, packed_cd, final_packed;
 
@@ -383,7 +383,7 @@ private:
         reordered = _mm256_permute4x64_epi64(final_packed, (3 << 6) | (2 << 4) | (1 << 2) | 0);
     }
 
-    void clamp_results(__m256i &result_a, __m256i &result_b, __m256i &result_c, __m256i &result_d)
+    inline void clamp_results(__m256i &result_a, __m256i &result_b, __m256i &result_c, __m256i &result_d)
     {
         __m256i zero = _mm256_setzero_si256();
         __m256i max255 = _mm256_set1_epi32(255);
@@ -401,7 +401,7 @@ private:
         result_d = _mm256_max_epi32(result_d, zero);
     }
 
-    void apply_for_32_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col, unsigned char *out_image)
+    inline void apply_for_32_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col, unsigned char *out_image)
     {
         // Step 1: Apply Sobel kernels to get 16-bit gradients
         __m256i gx_16_low, gx_16_high, gy_16_low, gy_16_high;
@@ -500,22 +500,21 @@ int main()
 
     start = ippGetCpuClocks();
     SobelSIMD sobel_operator_simd;
-    cv::Mat out_img_simd = sobel_operator_simd.apply(b_img_simd); // Apply to SIMD blur output
+    cv::Mat out_img_simd = sobel_operator_simd.apply(b_img_simd); 
     end = ippGetCpuClocks();
     time4 = end - start;
 
-    // --- Display Images ---
-    // cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("input image", in_img);
+    cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
+    cv::imshow("input image", in_img);
 
-    // cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("blur(serial)", b_img_serial);
+    cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("blur(serial)", b_img_serial);
 
-    // cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("blur(SIMD)", b_img_simd);
+    cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("blur(SIMD)", b_img_simd);
 
-    // cv::namedWindow("sobel(serial)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("sobel(serial)", out_img_serial);
+    cv::namedWindow("sobel(serial)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("sobel(serial)", out_img_serial);
 
     cv::namedWindow("sobel(SIMD)", cv::WINDOW_AUTOSIZE);
     cv::imshow("sobel(SIMD)", out_img_simd);

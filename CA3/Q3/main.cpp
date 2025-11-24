@@ -554,22 +554,27 @@ public:
     }
 };
 
-void compareImages(const cv::Mat &img_serial, const cv::Mat &img_simd)
+void printSectionHeader(const char* title) {
+    printf("\n\n");
+    printf("**********************************************************\n");
+    printf(" %s\n", title);
+    printf("**********************************************************\n");
+}
+
+void validateImage(const char* algorithm_name, const cv::Mat &img_serial, const cv::Mat &img_target)
 {
     unsigned int NCOLS = img_serial.cols;
     unsigned int NROWS = img_serial.rows;
     long long diff_count = 0;
-
+    
     for (int row = 0; row < NROWS; row++)
     {
         const unsigned char *p_serial = img_serial.ptr<unsigned char>(row);
-        const unsigned char *p_simd = img_simd.ptr<unsigned char>(row);
+        const unsigned char *p_target = img_target.ptr<unsigned char>(row);
 
         for (int col = 0; col < NCOLS; col++)
-            if (p_serial[col] != p_simd[col]){
+            if (p_serial[col] != p_target[col]) 
                 diff_count++;
-                printf("%i, %i\n", row, col);
-            }
     }
 
     long long total_processed_pixels = (long long)(NROWS - 2) * (NCOLS - 2);
@@ -578,40 +583,84 @@ void compareImages(const cv::Mat &img_serial, const cv::Mat &img_simd)
     if (total_processed_pixels > 0)
         diff_percentage = (double)diff_count / total_processed_pixels * 100.0;
 
-    printf("Total processed pixels: %lld\n", total_processed_pixels);
-    printf("Differing pixels count: %lld\n", diff_count);
-    printf("Difference percentage:  %f%%\n", diff_percentage);
+    const char* status = (diff_count == 0) ? "[ PASS ]" : "[ FAIL ]";
+    
+    // Print formatted row
+    // Format: | Algorithm Name | Diff Pixels | Error % | Status |
+    printf(" %-22s | %12lld | %8.4f%% | %s\n", 
+           algorithm_name, diff_count, diff_percentage, status);
 }
 
 void printPerformanceReport(const char* title, double time_serial, double time_simd, double time_omp, double time_simd_omp)
 {
-    printf("\n========================================\n");
-    printf(" Report: %s \n", title);
-    printf("========================================\n");
+    printf("\n");
+    printf("==========================================================\n");
+    printf(" METRIC: %s \n", title);
+    printf("==========================================================\n");
 
-    // 1. Raw Execution Times
-    printf("[Execution Times]\n");
-    printf("  Serial      : %9.6f s\n", time_serial);
-    printf("  SIMD        : %9.6f s\n", time_simd);
-    printf("  OpenMP      : %9.6f s\n", time_omp);
-    printf("  SIMD + OMP  : %9.6f s\n", time_simd_omp);
+    printf(" [Raw Timings]\n");
+    printf("  Serial            : %9.6f s\n", time_serial);
+    printf("  SIMD              : %9.6f s\n", time_simd);
+    printf("  OpenMP            : %9.6f s\n", time_omp);
+    printf("  SIMD + OpenMP     : %9.6f s\n", time_simd_omp);
 
-    printf("\n[Speedup vs. Serial] (Baseline)\n");
+    printf("\n [Speedup vs. Serial] (Baseline)\n");
     printf("  Serial / SIMD       : %6.2fx\n", time_serial / time_simd);
     printf("  Serial / OpenMP     : %6.2fx\n", time_serial / time_omp);
     printf("  Serial / SIMD+OMP   : %6.2fx  <-- Total Speedup\n", time_serial / time_simd_omp);
 
-    printf("\n[Relative Improvements]\n");
-    // How much faster is SIMD+OMP compared to just SIMD? (Shows scaling gain)
-    printf("  SIMD   / SIMD+OMP   : %6.2fx\n", time_simd / time_simd_omp);
-    
-    // How much faster is SIMD+OMP compared to just OMP? (Shows vectorization gain)
-    printf("  OpenMP / SIMD+OMP   : %6.2fx\n", time_omp / time_simd_omp);
-    
-    // Comparing the two intermediate methods
+    printf("\n [Relative Improvements]\n");
+    printf("  SIMD   / SIMD+OMP   : %6.2fx  (Scalability Gain)\n", time_simd / time_simd_omp);
+    printf("  OpenMP / SIMD+OMP   : %6.2fx  (Vectorization Gain)\n", time_omp / time_simd_omp);
     printf("  SIMD   / OpenMP     : %6.2fx\n", time_simd / time_omp);
 
-    printf("========================================\n\n");
+    printf("==========================================================\n");
+}
+
+// https://gemini.google.com/share/c28dddc233ef
+void runFullDiagnostics(
+    const cv::Mat& b_img_serial, const cv::Mat& b_img_simd, 
+    const cv::Mat& b_img_OMP,    const cv::Mat& b_img_simd_OMP,
+    const cv::Mat& out_img_serial, const cv::Mat& out_img_simd, 
+    const cv::Mat& out_img_OMP,    const cv::Mat& out_img_simd_OMP,
+    double time1_serial, double time1_SIMD, double time1_OMP, double time1_SIMD_OMP,
+    double time2_serial, double time2_SIMD, double time2_OMP, double time2_SIMD_OMP
+)
+{
+    // --- 1. VALIDATION DASHBOARD ---
+    printSectionHeader("VALIDATION DASHBOARD (Reference: Serial)");
+    printf(" %-22s | %12s | %9s | %s\n", "Comparison", "Diff Pixels", "Error %", "Status");
+    printf("---------------------------------------------------------------------\n");
+
+    // Blur Checks
+    validateImage("Blur (Serial vs OMP)",  b_img_serial, b_img_OMP);
+    validateImage("Blur (Serial vs SIMD)", b_img_serial, b_img_simd);
+    validateImage("Blur (Hybrid)",         b_img_serial, b_img_simd_OMP);
+    printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
+    
+    // Sobel Checks
+    validateImage("Sobel (Serial vs OMP)", out_img_serial, out_img_OMP);
+    validateImage("Sobel (Serial vs SIMD)", out_img_serial, out_img_simd);
+    validateImage("Sobel (Hybrid)",        out_img_serial, out_img_simd_OMP);
+    printf("---------------------------------------------------------------------\n");
+
+
+    // --- 2. PERFORMANCE DASHBOARD ---
+    printSectionHeader("PERFORMANCE ANALYSIS");
+
+    printPerformanceReport("Blur Kernel", 
+                           time1_serial, time1_SIMD, time1_OMP, time1_SIMD_OMP);
+    
+    printPerformanceReport("Sobel Kernel", 
+                           time2_serial, time2_SIMD, time2_OMP, time2_SIMD_OMP);
+
+    printPerformanceReport("Total Pipeline (Blur + Sobel)",
+                           time1_serial + time2_serial,
+                           time1_SIMD + time2_SIMD,
+                           time1_OMP + time2_OMP,
+                           time1_SIMD_OMP + time2_SIMD_OMP);
+    
+    printf("\n[Diagnostics Completed]\n");
 }
 
 int main()
@@ -700,27 +749,13 @@ int main()
 
     cv::namedWindow("sobel(SIMD + OMP)", cv::WINDOW_AUTOSIZE);
     cv::imshow("sobel(SIMD + OMP)", out_img_simd_OMP);
-
-    printf("\n--- Pixel Comparison (Blur)(Ser Vs. OMP)---\n");
-    compareImages(b_img_serial, b_img_OMP);
-    printf("\n--- Pixel Comparison (Blur)(Ser Vs. SIMD)---\n");
-    compareImages(b_img_serial, b_img_simd);
-    printf("\n--- Pixel Comparison (Blur)(Ser Vs. SIMD + OMP)---\n");
-    compareImages(b_img_serial, b_img_simd_OMP);
-    printf("\n--- Pixel Comparison (Sobel)(Ser Vs. OMP)---\n");
-    compareImages(out_img_serial, out_img_OMP);
-    printf("\n--- Pixel Comparison (Sobel)(Ser Vs. SIMD)---\n");
-    compareImages(out_img_serial, out_img_simd);
-    printf("\n--- Pixel Comparison (Sobel)(Ser Vs. SIMD + OMP)---\n");
-    compareImages(out_img_serial, out_img_simd_OMP);
-
-    printPerformanceReport("Blur Timings", time1_serial, time1_SIMD, time1_OMP, time1_SIMD_OMP);
-    printPerformanceReport("Sobel Timings", time2_serial, time2_SIMD, time2_OMP, time2_SIMD_OMP);
-    printPerformanceReport("Total Timings (Blur + Sobel)",
-        time1_serial + time2_serial,
-        time1_SIMD + time2_SIMD,
-        time1_OMP + time2_OMP,
-        time1_SIMD_OMP + time2_SIMD_OMP);
+    
+    runFullDiagnostics(
+        b_img_serial, b_img_simd, b_img_OMP, b_img_simd_OMP,
+        out_img_serial, out_img_simd, out_img_OMP, out_img_simd_OMP,
+        time1_serial, time1_SIMD, time1_OMP, time1_SIMD_OMP,
+        time2_serial, time2_SIMD, time2_OMP, time2_SIMD_OMP
+    );
 
     cv::waitKey(0);
     return 0;

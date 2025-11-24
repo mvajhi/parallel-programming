@@ -5,6 +5,9 @@
 #include "stdio.h"
 #include "ipp.h"
 #include "x86intrin.h"
+#include <omp.h>
+
+#define NUM_THREADS 6
 
 class Blur
 {
@@ -46,6 +49,37 @@ public:
         const unsigned char *in_image = (const unsigned char *)in_img.data;
         unsigned char *out_image = (unsigned char *)out_img.data;
 
+        for (int row = 1; row < NROWS - 1; row++)
+            for (int col = 1; col < NCOLS - 1; col++)
+                out_image[row * NCOLS + col] = apply_for_one_pixel(in_image, row, NCOLS, col);
+        return out_img;
+    }
+};
+
+class BlurOMP : public Blur
+{
+private:
+    unsigned char apply_for_one_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col)
+    {
+        int pixel = 0;
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)
+                pixel += kernel[i][j] * in_image[(row + i - 1) * NCOLS + col + j - 1];
+        return cv::saturate_cast<unsigned char>(pixel / normalizationFactor);
+    }
+
+public:
+    cv::Mat apply(const cv::Mat &in_img)
+    {
+        unsigned int NCOLS = in_img.cols;
+        unsigned int NROWS = in_img.rows;
+
+        cv::Mat out_img(in_img.rows, in_img.cols, CV_8U);
+
+        const unsigned char *in_image = (const unsigned char *)in_img.data;
+        unsigned char *out_image = (unsigned char *)out_img.data;
+
+        #pragma omp parallel for schedule(static)
         for (int row = 1; row < NROWS - 1; row++)
             for (int col = 1; col < NCOLS - 1; col++)
                 out_image[row * NCOLS + col] = apply_for_one_pixel(in_image, row, NCOLS, col);
@@ -472,42 +506,77 @@ void compareImages(const cv::Mat &img_serial, const cv::Mat &img_simd)
     printf("Difference percentage:  %f%%\n", diff_percentage);
 }
 
+void printPerformanceReport(const char* title, double time_serial, double time_simd, double time_omp)
+{
+    printf("\n\n--- %s ---\n", title);
+
+    printf("Serial Run time = %.6f s\n", time_serial);
+    printf("SIMD Run time   = %.6f s\n", time_simd);
+    printf("OMP Run time    = %.6f s\n", time_omp);
+
+    printf("\n--- Speedups ---\n");
+
+    printf("Speedup (Serial / SIMD) = %.2fx\n", 
+           time_serial / time_simd);
+
+    printf("Speedup (Serial / OMP)  = %.2fx\n", 
+           time_serial / time_omp);
+
+    printf("Speedup (SIMD / OMP)    = %.2fx\n", 
+           time_simd / time_omp);
+    
+    printf("\n");
+}
+
 int main()
 {
-    Ipp64u time1, time2, time3, time4;
-    Ipp64u start, end;
+    omp_set_num_threads(NUM_THREADS);
+
+    double time1_serial, time2_serial;
+    double time1_OMP, time2_OMP;
+    double time1_SIMD, time2_SIMD;
+    double start, end;
     cv::Mat in_img;
     in_img = cv::imread("base.jpg", cv::IMREAD_GRAYSCALE);
 
-    start = ippGetCpuClocks();
-    BlurSerial blur_operator;
-    cv::Mat b_img_serial = blur_operator.apply(in_img);
-    end = ippGetCpuClocks();
-    time1 = end - start;
+    start = omp_get_wtime();
+    BlurSerial blur_operator_serial;
+    cv::Mat b_img_serial = blur_operator_serial.apply(in_img);
+    end = omp_get_wtime();
+    time1_serial = end - start;
 
-    start = ippGetCpuClocks();
-    BlurSIMD blur_operator2;
-    cv::Mat b_img_simd = blur_operator2.apply(in_img);
-    end = ippGetCpuClocks();
-    time2 = end - start;
+    start = omp_get_wtime();
+    BlurOMP blur_operator_OMP;
+    cv::Mat b_img_OMP = blur_operator_OMP.apply(in_img);
+    end = omp_get_wtime();
+    time1_OMP = end - start;
 
-    start = ippGetCpuClocks();
+    start = omp_get_wtime();
+    BlurSIMD blur_operator_SIMD;
+    cv::Mat b_img_simd = blur_operator_SIMD.apply(in_img);
+    end = omp_get_wtime();
+    time1_SIMD = end - start;
+
+    start = omp_get_wtime();
     SobelSerial sobel_operator;
     cv::Mat out_img_serial = sobel_operator.apply(b_img_serial);
-    end = ippGetCpuClocks();
-    time3 = end - start;
+    end = omp_get_wtime();
+    time2_serial = end - start;
 
-    start = ippGetCpuClocks();
+    start = omp_get_wtime();
     SobelSIMD sobel_operator_simd;
     cv::Mat out_img_simd = sobel_operator_simd.apply(b_img_simd);
-    end = ippGetCpuClocks();
-    time4 = end - start;
+    end = omp_get_wtime();
+    time2_SIMD = end - start;
 
     cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
     cv::imshow("input image", in_img);
 
     cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
     cv::imshow("blur(serial)", b_img_serial);
+
+    cv::namedWindow("blur(OMP)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("blur(OMP)", b_img_OMP);
 
     cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
     cv::imshow("blur(SIMD)", b_img_simd);
@@ -518,27 +587,19 @@ int main()
     cv::namedWindow("sobel(SIMD)", cv::WINDOW_AUTOSIZE);
     cv::imshow("sobel(SIMD)", out_img_simd);
 
-    printf("\n--- Pixel Comparison (Blur)---\n");
+    printf("\n--- Pixel Comparison (Blur)(Ser Vs. OMP)---\n");
+    compareImages(b_img_serial, b_img_OMP);
+    printf("\n--- Pixel Comparison (Blur)(Ser Vs. SIMD)---\n");
     compareImages(b_img_serial, b_img_simd);
     printf("\n--- Pixel Comparison (Sobel)---\n");
     compareImages(out_img_serial, out_img_simd);
 
-    printf("\n\n--- Blur Timings ---\n");
-    printf("Serial Run time = %u \n", (Ipp32s)time1);
-    printf("Parallel Run time = %u \n", (Ipp32s)time2);
-    printf("Speedup = %f\n\n", (float)(time1) / (float)time2);
-
-    printf("\n--- Sobel Timings ---\n");
-    printf("Serial Run time = %u \n", (Ipp32s)time3);
-    printf("Parallel Run time = %u \n", (Ipp32s)time4);
-    printf("Speedup = %f\n\n", (float)(time3) / (float)time4);
-
-    Ipp64u total_serial_time = time1 + time3;
-    Ipp64u total_parallel_time = time2 + time4;
-    printf("\n--- Total Timings (Blur + Sobel) ---\n");
-    printf("Serial Total Run time = %u \n", (Ipp32s)total_serial_time);
-    printf("Parallel Total Run time = %u \n", (Ipp32s)total_parallel_time);
-    printf("Total Speedup = %f\n\n", (float)(total_serial_time) / (float)total_parallel_time);
+    printPerformanceReport("Blur Timings", time1_serial, time1_SIMD, time1_OMP);
+    printPerformanceReport("Sobel Timings", time2_serial, time2_SIMD, 1);
+    printPerformanceReport("Total Timings (Blur + Sobel)",
+         time1_serial + time2_serial,
+         time1_SIMD + time2_SIMD,
+          1);
 
     cv::waitKey(0);
     return 0;

@@ -108,11 +108,11 @@ public:
 	}
 };
 
-class ParallelLayer : public Layer
+class SIMDLayer : public Layer
 {
 private:
 public:
-	ParallelLayer(int input_size, int output_size)
+	SIMDLayer(int input_size, int output_size)
 		: Layer(input_size, output_size) {}
 
 	float *forward(float *x) override
@@ -217,13 +217,13 @@ int main(void)
 
 	cout << "\n--- Parallel Execution ---" << endl;
 	{
-		ParallelLayer l1(INPUT_SIZE, HIDDEN_SIZE);
+		SIMDLayer l1(INPUT_SIZE, HIDDEN_SIZE);
 		l1.set_weights(weights_l1, bais_l1);
 
-		ParallelLayer l2(HIDDEN_SIZE, HIDDEN_SIZE);
+		SIMDLayer l2(HIDDEN_SIZE, HIDDEN_SIZE);
 		l2.set_weights(weights_l2, bais_l2);
 
-		ParallelLayer l3(HIDDEN_SIZE, OUTPUT_SIZE);
+		SIMDLayer l3(HIDDEN_SIZE, OUTPUT_SIZE);
 		l3.set_weights(weights_l3, bais_l3);
 
         time2 = execute_and_print(input, l1, l2, l3);

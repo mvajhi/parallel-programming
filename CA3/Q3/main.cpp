@@ -44,7 +44,7 @@ public:
         unsigned int NCOLS = in_img.cols;
         unsigned int NROWS = in_img.rows;
 
-        cv::Mat out_img(in_img.rows, in_img.cols, CV_8U);
+        cv::Mat out_img = cv::Mat::zeros(in_img.rows, in_img.cols, CV_8U);
 
         const unsigned char *in_image = (const unsigned char *)in_img.data;
         unsigned char *out_image = (unsigned char *)out_img.data;
@@ -228,6 +228,48 @@ public:
         const unsigned char *in_image = (const unsigned char *)in_img.data;
         unsigned char *out_image = (unsigned char *)out_img.data;
 
+        for (int row = 1; row < NROWS - 1; row++)
+            for (int col = 1; col < NCOLS - 1; col++)
+                out_image[row * NCOLS + col] = apply_for_one_pixel(in_image, row, NCOLS, col);
+        return out_img;
+    }
+};
+
+class SobelOMP : public Sobel
+{
+private:
+    unsigned char apply_for_one_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col)
+    {
+        int gx = 0;
+        int gy = 0;
+
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)
+            {
+                int pixel_val = in_image[(row + i - 1) * NCOLS + col + j - 1];
+                if (kernel_x[i][j] != 0)
+                    gx += kernel_x[i][j] * pixel_val;
+                if (kernel_y[i][j] != 0)
+                    gy += kernel_y[i][j] * pixel_val;
+            }
+
+        double magnitude = std::sqrt(static_cast<double>(gx * gx) + static_cast<double>(gy * gy));
+
+        return cv::saturate_cast<unsigned char>(magnitude);
+    }
+
+public:
+    cv::Mat apply(const cv::Mat &in_img) override
+    {
+        unsigned int NCOLS = in_img.cols;
+        unsigned int NROWS = in_img.rows;
+
+        cv::Mat out_img(in_img.rows, in_img.cols, CV_8U);
+
+        const unsigned char *in_image = (const unsigned char *)in_img.data;
+        unsigned char *out_image = (unsigned char *)out_img.data;
+
+        #pragma omp parallel for schedule(static)
         for (int row = 1; row < NROWS - 1; row++)
             for (int col = 1; col < NCOLS - 1; col++)
                 out_image[row * NCOLS + col] = apply_for_one_pixel(in_image, row, NCOLS, col);
@@ -508,7 +550,7 @@ void compareImages(const cv::Mat &img_serial, const cv::Mat &img_simd)
 
 void printPerformanceReport(const char* title, double time_serial, double time_simd, double time_omp)
 {
-    printf("\n\n--- %s ---\n", title);
+    printf("\n### %s ###\n", title);
 
     printf("Serial Run time = %.6f s\n", time_serial);
     printf("SIMD Run time   = %.6f s\n", time_simd);
@@ -558,48 +600,59 @@ int main()
     time1_SIMD = end - start;
 
     start = omp_get_wtime();
-    SobelSerial sobel_operator;
-    cv::Mat out_img_serial = sobel_operator.apply(b_img_serial);
+    SobelSerial sobel_operator_serial;
+    cv::Mat out_img_serial = sobel_operator_serial.apply(b_img_serial);
     end = omp_get_wtime();
     time2_serial = end - start;
 
     start = omp_get_wtime();
+    SobelOMP sobel_operator_OMP;
+    cv::Mat out_img_OMP = sobel_operator_OMP.apply(b_img_serial);
+    end = omp_get_wtime();
+    time2_OMP = end - start;
+
+    start = omp_get_wtime();
     SobelSIMD sobel_operator_simd;
-    cv::Mat out_img_simd = sobel_operator_simd.apply(b_img_simd);
+    cv::Mat out_img_simd = sobel_operator_simd.apply(b_img_serial);
     end = omp_get_wtime();
     time2_SIMD = end - start;
 
-    cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
-    cv::imshow("input image", in_img);
+    // cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("input image", in_img);
 
-    cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
-    cv::imshow("blur(serial)", b_img_serial);
+    // cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("blur(serial)", b_img_serial);
 
-    cv::namedWindow("blur(OMP)", cv::WINDOW_AUTOSIZE);
-    cv::imshow("blur(OMP)", b_img_OMP);
+    // cv::namedWindow("blur(OMP)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("blur(OMP)", b_img_OMP);
 
-    cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
-    cv::imshow("blur(SIMD)", b_img_simd);
+    // cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("blur(SIMD)", b_img_simd);
 
-    cv::namedWindow("sobel(serial)", cv::WINDOW_AUTOSIZE);
-    cv::imshow("sobel(serial)", out_img_serial);
+    // cv::namedWindow("sobel(serial)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("sobel(serial)", out_img_serial);
 
-    cv::namedWindow("sobel(SIMD)", cv::WINDOW_AUTOSIZE);
-    cv::imshow("sobel(SIMD)", out_img_simd);
+    // cv::namedWindow("sobel(OMP)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("sobel(OMP)", out_img_OMP);
+
+    // cv::namedWindow("sobel(SIMD)", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("sobel(SIMD)", out_img_simd);
 
     printf("\n--- Pixel Comparison (Blur)(Ser Vs. OMP)---\n");
     compareImages(b_img_serial, b_img_OMP);
     printf("\n--- Pixel Comparison (Blur)(Ser Vs. SIMD)---\n");
     compareImages(b_img_serial, b_img_simd);
-    printf("\n--- Pixel Comparison (Sobel)---\n");
+    printf("\n--- Pixel Comparison (Sobel)(Ser Vs. OMP)---\n");
+    compareImages(out_img_serial, out_img_OMP);
+    printf("\n--- Pixel Comparison (Sobel)(Ser Vs. SIMD)---\n");
     compareImages(out_img_serial, out_img_simd);
 
     printPerformanceReport("Blur Timings", time1_serial, time1_SIMD, time1_OMP);
-    printPerformanceReport("Sobel Timings", time2_serial, time2_SIMD, 1);
+    printPerformanceReport("Sobel Timings", time2_serial, time2_SIMD, time2_OMP);
     printPerformanceReport("Total Timings (Blur + Sobel)",
          time1_serial + time2_serial,
          time1_SIMD + time2_SIMD,
-          1);
+         time1_OMP + time2_OMP);
 
     cv::waitKey(0);
     return 0;

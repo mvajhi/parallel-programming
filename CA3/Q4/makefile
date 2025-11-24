@@ -8,7 +8,7 @@ INCDIR=-I$(P)/include
 
 LIBDIR=-L$(P)/lib
 
-LIBFILE=-lippcore
+LIBFILE=-lippcore -fopenmp
 
 all: main
 

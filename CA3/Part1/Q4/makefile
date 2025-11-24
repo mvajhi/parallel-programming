@@ -1,22 +1,17 @@
-CC=g++
+CC=clang++
 
-CFLAGS=-c -mavx2 -mfma
+CFLAGS=-c -mavx2 -mfma -fopenmp
+LIBFLAGS=-fopenmp
 
-P=/home/mvajhi/intel/oneapi/ipp/latest
-
-INCDIR=-I$(P)/include
-
-LIBDIR=-L$(P)/lib
-
-LIBFILE=-lippcore -fopenmp
+CST11=-std=c++11
 
 all: main
 
 main: main.o 
-	$(CC) main.o $(LIBDIR) $(LIBFILE) -o main.out
+	$(CC) $(LIBFLAGS) $(CST11) main.o -o main.out
 
 main.o: main.cpp
-	$(CC) $(CFLAGS) $(INCDIR) main.cpp
+	$(CC) $(CFLAGS) $(CST11) main.cpp
 
 clean:
 	rm -f *o main

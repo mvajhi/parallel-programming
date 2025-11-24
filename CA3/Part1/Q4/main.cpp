@@ -1,5 +1,4 @@
 #include "stdio.h"
-#include "ipp.h"
 #include "x86intrin.h"
 #include <iostream>
 #include <iomanip>

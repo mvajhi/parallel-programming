@@ -69,7 +69,7 @@ public:
         const unsigned char *in_image = (const unsigned char *)in_img.data;
         unsigned char *out_image = (unsigned char *)out_img.data;
 
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int row = 1; row < NROWS - 1; row++)
             for (int col = 1; col < NCOLS - 1; col++)
                 out_image[row * NCOLS + col] = apply_for_one_pixel(in_image, row, NCOLS, col);
@@ -177,16 +177,17 @@ public:
         const unsigned char *in_image = (const unsigned char *)in_img.data;
         unsigned char *out_image = (unsigned char *)out_img.data;
 
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int row = 1; row < NROWS - 1; row++)
             for (int col = 1; col < NCOLS - 1; col += 32)
             {
                 apply_for_32_pixel(in_image, row, NCOLS, col, out_image);
                 if (col == 1)
                     out_image[(row * NCOLS) + 0] = 0;
-                else if (!(col + 32 < NCOLS - 1)){
+                else if (!(col + 32 < NCOLS - 1))
+                {
                     out_image[(row * NCOLS) + (NCOLS - 1)] = 0;
-                    out_image[((row+1) * NCOLS) + 0] = 0;
+                    out_image[((row + 1) * NCOLS) + 0] = 0;
                 }
             }
 
@@ -269,7 +270,7 @@ public:
         const unsigned char *in_image = (const unsigned char *)in_img.data;
         unsigned char *out_image = (unsigned char *)out_img.data;
 
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int row = 1; row < NROWS - 1; row++)
             for (int col = 1; col < NCOLS - 1; col++)
                 out_image[row * NCOLS + col] = apply_for_one_pixel(in_image, row, NCOLS, col);
@@ -534,7 +535,7 @@ public:
         const unsigned char *in_image = (const unsigned char *)in_img.data;
         unsigned char *out_image = (unsigned char *)out_img.data;
 
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int row = 1; row < NROWS - 1; row++)
             for (int col = 1; col < NCOLS - 1; col += 32)
             {
@@ -542,9 +543,10 @@ public:
 
                 if (col == 1)
                     out_image[(row * NCOLS) + 0] = 0;
-                else if (!(col + 32 < NCOLS - 1)){
+                else if (!(col + 32 < NCOLS - 1))
+                {
                     out_image[(row * NCOLS) + (NCOLS - 1)] = 0;
-                    out_image[((row+1) * NCOLS) + 0] = 0;
+                    out_image[((row + 1) * NCOLS) + 0] = 0;
                 }
             }
 
@@ -554,26 +556,27 @@ public:
     }
 };
 
-void printSectionHeader(const char* title) {
+void printSectionHeader(const char *title)
+{
     printf("\n\n");
     printf("**********************************************************\n");
     printf(" %s\n", title);
     printf("**********************************************************\n");
 }
 
-void validateImage(const char* algorithm_name, const cv::Mat &img_serial, const cv::Mat &img_target)
+void validateImage(const char *algorithm_name, const cv::Mat &img_serial, const cv::Mat &img_target)
 {
     unsigned int NCOLS = img_serial.cols;
     unsigned int NROWS = img_serial.rows;
     long long diff_count = 0;
-    
+
     for (int row = 0; row < NROWS; row++)
     {
         const unsigned char *p_serial = img_serial.ptr<unsigned char>(row);
         const unsigned char *p_target = img_target.ptr<unsigned char>(row);
 
         for (int col = 0; col < NCOLS; col++)
-            if (p_serial[col] != p_target[col]) 
+            if (p_serial[col] != p_target[col])
                 diff_count++;
     }
 
@@ -583,15 +586,15 @@ void validateImage(const char* algorithm_name, const cv::Mat &img_serial, const 
     if (total_processed_pixels > 0)
         diff_percentage = (double)diff_count / total_processed_pixels * 100.0;
 
-    const char* status = (diff_count == 0) ? "[ PASS ]" : "[ FAIL ]";
-    
+    const char *status = (diff_count == 0) ? "[ PASS ]" : "[ FAIL ]";
+
     // Print formatted row
     // Format: | Algorithm Name | Diff Pixels | Error % | Status |
-    printf(" %-22s | %12lld | %8.4f%% | %s\n", 
+    printf(" %-22s | %12lld | %8.4f%% | %s\n",
            algorithm_name, diff_count, diff_percentage, status);
 }
 
-void printPerformanceReport(const char* title, double time_serial, double time_simd, double time_omp, double time_simd_omp)
+void printPerformanceReport(const char *title, double time_serial, double time_simd, double time_omp, double time_simd_omp)
 {
     printf("\n");
     printf("==========================================================\n");
@@ -619,13 +622,12 @@ void printPerformanceReport(const char* title, double time_serial, double time_s
 
 // https://gemini.google.com/share/c28dddc233ef
 void runFullDiagnostics(
-    const cv::Mat& b_img_serial, const cv::Mat& b_img_simd, 
-    const cv::Mat& b_img_OMP,    const cv::Mat& b_img_simd_OMP,
-    const cv::Mat& out_img_serial, const cv::Mat& out_img_simd, 
-    const cv::Mat& out_img_OMP,    const cv::Mat& out_img_simd_OMP,
+    const cv::Mat &b_img_serial, const cv::Mat &b_img_simd,
+    const cv::Mat &b_img_OMP, const cv::Mat &b_img_simd_OMP,
+    const cv::Mat &out_img_serial, const cv::Mat &out_img_simd,
+    const cv::Mat &out_img_OMP, const cv::Mat &out_img_simd_OMP,
     double time1_serial, double time1_SIMD, double time1_OMP, double time1_SIMD_OMP,
-    double time2_serial, double time2_SIMD, double time2_OMP, double time2_SIMD_OMP
-)
+    double time2_serial, double time2_SIMD, double time2_OMP, double time2_SIMD_OMP)
 {
     // --- 1. VALIDATION DASHBOARD ---
     printSectionHeader("VALIDATION DASHBOARD (Reference: Serial)");
@@ -633,25 +635,24 @@ void runFullDiagnostics(
     printf("---------------------------------------------------------------------\n");
 
     // Blur Checks
-    validateImage("Blur (Serial vs OMP)",  b_img_serial, b_img_OMP);
+    validateImage("Blur (Serial vs OMP)", b_img_serial, b_img_OMP);
     validateImage("Blur (Serial vs SIMD)", b_img_serial, b_img_simd);
-    validateImage("Blur (Hybrid)",         b_img_serial, b_img_simd_OMP);
+    validateImage("Blur (Hybrid)", b_img_serial, b_img_simd_OMP);
     printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
-    
+
     // Sobel Checks
     validateImage("Sobel (Serial vs OMP)", out_img_serial, out_img_OMP);
     validateImage("Sobel (Serial vs SIMD)", out_img_serial, out_img_simd);
-    validateImage("Sobel (Hybrid)",        out_img_serial, out_img_simd_OMP);
+    validateImage("Sobel (Hybrid)", out_img_serial, out_img_simd_OMP);
     printf("---------------------------------------------------------------------\n");
-
 
     // --- 2. PERFORMANCE DASHBOARD ---
     printSectionHeader("PERFORMANCE ANALYSIS");
 
-    printPerformanceReport("Blur Kernel", 
+    printPerformanceReport("Blur Kernel",
                            time1_serial, time1_SIMD, time1_OMP, time1_SIMD_OMP);
-    
-    printPerformanceReport("Sobel Kernel", 
+
+    printPerformanceReport("Sobel Kernel",
                            time2_serial, time2_SIMD, time2_OMP, time2_SIMD_OMP);
 
     printPerformanceReport("Total Pipeline (Blur + Sobel)",
@@ -659,7 +660,7 @@ void runFullDiagnostics(
                            time1_SIMD + time2_SIMD,
                            time1_OMP + time2_OMP,
                            time1_SIMD_OMP + time2_SIMD_OMP);
-    
+
     printf("\n[Diagnostics Completed]\n");
 }
 
@@ -749,13 +750,12 @@ int main()
 
     cv::namedWindow("sobel(SIMD + OMP)", cv::WINDOW_AUTOSIZE);
     cv::imshow("sobel(SIMD + OMP)", out_img_simd_OMP);
-    
+
     runFullDiagnostics(
         b_img_serial, b_img_simd, b_img_OMP, b_img_simd_OMP,
         out_img_serial, out_img_simd, out_img_OMP, out_img_simd_OMP,
         time1_serial, time1_SIMD, time1_OMP, time1_SIMD_OMP,
-        time2_serial, time2_SIMD, time2_OMP, time2_SIMD_OMP
-    );
+        time2_serial, time2_SIMD, time2_OMP, time2_SIMD_OMP);
 
     cv::waitKey(0);
     return 0;

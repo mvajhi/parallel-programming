@@ -28,7 +28,7 @@ public:
 
 class BlurSerial : public Blur
 {
-private:
+protected:
     unsigned char apply_for_one_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col)
     {
         int pixel = 0;
@@ -56,18 +56,8 @@ public:
     }
 };
 
-class BlurOMP : public Blur
+class BlurOMP : public BlurSerial
 {
-private:
-    unsigned char apply_for_one_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col)
-    {
-        int pixel = 0;
-        for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 3; j++)
-                pixel += kernel[i][j] * in_image[(row + i - 1) * NCOLS + col + j - 1];
-        return cv::saturate_cast<unsigned char>(pixel / normalizationFactor);
-    }
-
 public:
     cv::Mat apply(const cv::Mat &in_img)
     {
@@ -79,7 +69,7 @@ public:
         const unsigned char *in_image = (const unsigned char *)in_img.data;
         unsigned char *out_image = (unsigned char *)out_img.data;
 
-        #pragma omp parallel for schedule(static)
+        #pragma omp parallel for
         for (int row = 1; row < NROWS - 1; row++)
             for (int col = 1; col < NCOLS - 1; col++)
                 out_image[row * NCOLS + col] = apply_for_one_pixel(in_image, row, NCOLS, col);
@@ -196,7 +186,7 @@ public:
 
 class SobelSerial : public Sobel
 {
-private:
+protected:
     unsigned char apply_for_one_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col)
     {
         int gx = 0;
@@ -235,29 +225,8 @@ public:
     }
 };
 
-class SobelOMP : public Sobel
+class SobelOMP : public SobelSerial
 {
-private:
-    unsigned char apply_for_one_pixel(const unsigned char *in_image, int row, unsigned int NCOLS, int col)
-    {
-        int gx = 0;
-        int gy = 0;
-
-        for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 3; j++)
-            {
-                int pixel_val = in_image[(row + i - 1) * NCOLS + col + j - 1];
-                if (kernel_x[i][j] != 0)
-                    gx += kernel_x[i][j] * pixel_val;
-                if (kernel_y[i][j] != 0)
-                    gy += kernel_y[i][j] * pixel_val;
-            }
-
-        double magnitude = std::sqrt(static_cast<double>(gx * gx) + static_cast<double>(gy * gy));
-
-        return cv::saturate_cast<unsigned char>(magnitude);
-    }
-
 public:
     cv::Mat apply(const cv::Mat &in_img) override
     {
@@ -617,26 +586,26 @@ int main()
     end = omp_get_wtime();
     time2_SIMD = end - start;
 
-    // cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("input image", in_img);
+    cv::namedWindow("input image", cv::WINDOW_AUTOSIZE);
+    cv::imshow("input image", in_img);
 
-    // cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("blur(serial)", b_img_serial);
+    cv::namedWindow("blur(serial)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("blur(serial)", b_img_serial);
 
-    // cv::namedWindow("blur(OMP)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("blur(OMP)", b_img_OMP);
+    cv::namedWindow("blur(OMP)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("blur(OMP)", b_img_OMP);
 
-    // cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("blur(SIMD)", b_img_simd);
+    cv::namedWindow("blur(SIMD)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("blur(SIMD)", b_img_simd);
 
-    // cv::namedWindow("sobel(serial)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("sobel(serial)", out_img_serial);
+    cv::namedWindow("sobel(serial)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("sobel(serial)", out_img_serial);
 
-    // cv::namedWindow("sobel(OMP)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("sobel(OMP)", out_img_OMP);
+    cv::namedWindow("sobel(OMP)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("sobel(OMP)", out_img_OMP);
 
-    // cv::namedWindow("sobel(SIMD)", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("sobel(SIMD)", out_img_simd);
+    cv::namedWindow("sobel(SIMD)", cv::WINDOW_AUTOSIZE);
+    cv::imshow("sobel(SIMD)", out_img_simd);
 
     printf("\n--- Pixel Comparison (Blur)(Ser Vs. OMP)---\n");
     compareImages(b_img_serial, b_img_OMP);

@@ -277,40 +277,6 @@ public:
     }
 };
 
-class SobelSIMD_OMP : public SobelSIMD
-{
-public:
-    cv::Mat apply(const cv::Mat &in_img) override
-    {
-        unsigned int NCOLS = in_img.cols;
-        unsigned int NROWS = in_img.rows;
-
-        cv::Mat out_img(in_img.rows, in_img.cols, CV_8U);
-
-        const unsigned char *in_image = (const unsigned char *)in_img.data;
-        unsigned char *out_image = (unsigned char *)out_img.data;
-
-        #pragma omp parallel for
-        for (int row = 1; row < NROWS - 1; row++)
-            for (int col = 1; col < NCOLS - 1; col += 32)
-            {
-                apply_for_32_pixel(in_image, row, NCOLS, col, out_image);
-
-                if (col == 1)
-                    out_image[(row * NCOLS) + 0] = 0;
-                else if (!(col + 32 < NCOLS - 1))
-                {
-                    out_image[(row * NCOLS) + (NCOLS - 1)] = 0;
-                    out_image[((row + 1) * NCOLS) + 0] = 0;
-                }
-            }
-
-        out_image[((NROWS - 1) * (NCOLS)) + 0] = 0;
-
-        return out_img;
-    }
-};
-
 class SobelSIMD_Pthread : public SobelSIMD
 {
 private:

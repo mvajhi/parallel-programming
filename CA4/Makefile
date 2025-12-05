@@ -1,12 +1,12 @@
 CC=g++
 
-CFLAGS=-c -std=c++17 -O3 -mavx2 -fopenmp -pthread
+CFLAGS=-c -std=c++17 -O3 -mavx2 -pthread
 
 INCDIR=$(shell pkg-config --cflags opencv4)
 
 LIBDIR=
 
-LIBFILE=$(shell pkg-config --libs opencv4) -fopenmp -pthread
+LIBFILE=$(shell pkg-config --libs opencv4) -pthread
 
 all: main
 

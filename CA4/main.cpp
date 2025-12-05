@@ -388,7 +388,7 @@ public:
 
 class FrameQueue {
 private:
-    queue<cv::Mat> queue;
+    queue<cv::Mat> frame_queue;
     int capacity;
     bool finished;
 
@@ -412,7 +412,7 @@ public:
     bool push(const cv::Mat& frame) {
         pthread_mutex_lock(&mutex);
 
-        while (queue.size() >= capacity && !finished) {
+        while (frame_queue.size() >= capacity && !finished) {
             pthread_cond_wait(&cond_not_full, &mutex);
         }
 
@@ -421,7 +421,7 @@ public:
             return false;
         }
 
-        queue.push(frame);
+        frame_queue.push(frame);
         pthread_cond_signal(&cond_not_empty);
         pthread_mutex_unlock(&mutex);
         return true;
@@ -430,17 +430,17 @@ public:
     bool pop(cv::Mat& frame) {
         pthread_mutex_lock(&mutex);
 
-        while (queue.empty() && !finished) {
+        while (frame_queue.empty() && !finished) {
             pthread_cond_wait(&cond_not_empty, &mutex);
         }
 
-        if (queue.empty() && finished) {
+        if (frame_queue.empty() && finished) {
             pthread_mutex_unlock(&mutex);
             return false;
         }
 
-        frame = queue.front();
-        queue.pop();
+        frame = frame_queue.front();
+        frame_queue.pop();
         pthread_cond_signal(&cond_not_full);
         pthread_mutex_unlock(&mutex);
         return true;

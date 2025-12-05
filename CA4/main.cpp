@@ -1,3 +1,8 @@
+/*
+    mahdi naienim   810101536
+    mahdi vajhi     810101558
+*/
+
 #include <omp.h>
 #include <cmath>
 #include <queue>
